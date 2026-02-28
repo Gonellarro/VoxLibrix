@@ -1,0 +1,12 @@
+# .gitignore
+data/
+**/__pycache__/
+**/.venv/
+**/node_modules/
+**/dist/
+**/.DS_Store
+*.db
+*.wav
+*.mp3
+frontend/.env
+backend/.env

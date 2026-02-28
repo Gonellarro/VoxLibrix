@@ -1,0 +1,45 @@
+services:
+  tts-engine:
+    build: ./tts-engine
+    container_name: tts-engine
+    expose:
+      - "8000"
+    volumes:
+      - ./data/models:/models
+      - ./data/voices:/voice
+    environment:
+      - TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base
+      - REF_AUDIO=/voice/test_voice/referencia.mp3
+      - REF_TEXT=Prólogo. Mar de Noruega. Año aproximado, 1200 después de Cristo. El barco de pesca había salido de su ruta habitual. Eric y su hijo Hans habían salido a faenar al norte de su poblado natal, Blake. Esos días había habido mucha corriente y poco viento, lo que los alejó bastante de la zona de pesca del bacalao.
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+  backend:
+    build: ./backend
+    container_name: audiobook-backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=sqlite:////data/db/audiobooks.db
+      - TTS_ENGINE_URL=http://tts-engine:8000
+    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+    depends_on:
+      - tts-engine
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: audiobook-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+    restart: unless-stopped
