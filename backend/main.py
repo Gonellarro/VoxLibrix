@@ -211,7 +211,12 @@ def process_audiobook_task(project_id: int, voice_id: int, sentences: list):
             except Exception as e:
                 print(f"Exception generating segment {i}: {e}")
 
-        project.status = "completed"
+        if os.path.exists(final_path):
+            project.status = "completed"
+        else:
+            project.status = "error"
+            project.error_message = "No se pudo generar ningún segmento de audio con éxito."
+            
         project.current_sentence = None
         db.commit()
 
