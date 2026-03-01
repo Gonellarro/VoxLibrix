@@ -17,6 +17,18 @@ services:
         limits:
           memory: 4g
 
+  db:
+    image: mysql:8.0
+    container_name: audiobook-db
+    restart: unless-stopped
+    environment:
+      - MYSQL_DATABASE=audiobooks
+      - MYSQL_ROOT_PASSWORD=audio_pass
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    expose:
+      - "3306"
+
   backend:
     build: ./backend
     container_name: audiobook-backend
@@ -26,11 +38,13 @@ services:
       - ./data:/data
       - ./backend:/app
     environment:
-      - DATABASE_URL=sqlite:////data/db/audiobooks.db
+      - DATABASE_URL=mysql+pymysql://root:audio_pass@db/audiobooks
       - TTS_ENGINE_URL=http://tts-engine:8000
+      - PYTHONUNBUFFERED=1
     command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
     depends_on:
       - tts-engine
+      - db
     restart: unless-stopped
 
   frontend:

@@ -13,7 +13,9 @@ RUN pip install --no-cache-dir \
     requests \
     python-multipart \
     pydantic \
-    pydub
+    pydub \
+    pymysql \
+    cryptography
 
 COPY . .
 

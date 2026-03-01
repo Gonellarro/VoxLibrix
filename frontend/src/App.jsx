@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Mic, BookOpen, Music, Activity, Trash2, Play, X, Upload, CheckCircle2, Download, Volume2, Loader2 } from 'lucide-react'
+import { Plus, Mic, BookOpen, Music, Activity, Trash2, Play, Pause, Clock, X, Upload, CheckCircle2, Download, Volume2, Loader2 } from 'lucide-react'
 
 const Navbar = ({ onToggleSidebar }) => (
     <nav className="header">
@@ -139,7 +139,7 @@ const AddVoiceModal = ({ isOpen, onClose, onSuccess }) => {
                             <input
                                 type="text"
                                 className="glass-card"
-                                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)' }}
+                                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', color: 'white' }}
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="Ej: Narrador"
@@ -169,7 +169,7 @@ const AddVoiceModal = ({ isOpen, onClose, onSuccess }) => {
                             <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Transcripción exacta</label>
                             <textarea
                                 className="glass-card"
-                                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', height: '100px', resize: 'none' }}
+                                style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', height: '100px', resize: 'none', color: 'white' }}
                                 value={text}
                                 onChange={(e) => setText(e.target.value)}
                                 placeholder="Escribe exactamente lo que se dice en el audio..."
@@ -247,7 +247,7 @@ const TestVoiceModal = ({ isOpen, voice, onClose }) => {
                     <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Texto para sintetizar</label>
                     <textarea
                         className="glass-card"
-                        style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', height: '100px', resize: 'none', fontSize: '1.1rem' }}
+                        style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', height: '100px', resize: 'none', fontSize: '1.1rem', color: 'white' }}
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         placeholder="Escribe algo..."
@@ -359,38 +359,37 @@ const BookGenerator = ({ voices }) => {
         } catch (err) { console.error(err); setTimeout(() => pollStatus(id), 5000) }
     }
 
+    const handlePause = async () => {
+        try {
+            await fetch(`http://localhost:8080/projects/${projectId}/pause`, { method: 'POST' })
+            setStatus('paused')
+        } catch (err) { console.error(err) }
+    }
+
+    const handleResume = async () => {
+        try {
+            await fetch(`http://localhost:8080/projects/${projectId}/resume`, { method: 'POST' })
+            setStatus('processing')
+            pollStatus(projectId)
+        } catch (err) { console.error(err) }
+    }
+
     const handleGenerate = async () => {
         if (!text || !defaultVoice) return alert('Escribe algo y selecciona una voz para el narrador')
-
-        setStatus('processing')
-        setProgress(0)
-        setError(null)
-
+        setStatus('processing'); setProgress(0); setError(null); setCurrentSentence('')
         try {
             const res = await fetch('http://localhost:8080/generate-multi-voice', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text,
-                    mappings,
-                    default_voice_id: defaultVoice
-                })
+                body: JSON.stringify({ text, mappings, default_voice_id: defaultVoice })
             })
-
             if (res.ok) {
                 const data = await res.json()
-                setProjectId(data.project_id)
-                pollStatus(data.project_id)
+                setProjectId(data.project_id); pollStatus(data.project_id)
             } else {
-                const errData = await res.json()
-                setError(errData.detail || 'Error desconocido')
-                setStatus('error')
+                const errData = await res.json(); setError(errData.detail || 'Error desconocido'); setStatus('error')
             }
-        } catch (err) {
-            console.error(err)
-            setError('Error de conexión')
-            setStatus('error')
-        }
+        } catch (err) { console.error(err); setError('Error de conexión'); setStatus('error') }
     }
 
     return (
@@ -477,17 +476,36 @@ const BookGenerator = ({ voices }) => {
                         className="btn btn-primary"
                         style={{ width: '100%', marginTop: '1rem', background: 'var(--secondary)' }}
                         onClick={handleGenerate}
-                        disabled={status === 'processing'}
+                        disabled={status === 'processing' || status === 'paused'}
                     >
-                        {status === 'processing' ? 'Procesando...' : 'Generar Libro'}
+                        {status === 'processing' ? 'Procesando...' : status === 'paused' ? 'Pausado' : 'Generar Libro'}
                     </button>
 
-                    {status === 'processing' && (
+                    {(status === 'processing' || status === 'paused') && (
                         <div style={{ marginTop: '1.5rem' }}>
-                            <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden', marginBottom: '0.5rem' }}>
+                            <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden', marginBottom: '1rem' }}>
                                 <div style={{ width: `${progress}%`, height: '100%', background: 'var(--secondary)', transition: 'width 0.5s' }}></div>
                             </div>
-                            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{progress}% completado</p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{progress}% completado</p>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    {status === 'processing' ? (
+                                        <button className="btn" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={handlePause}>
+                                            <Pause size={12} /> Pausar
+                                        </button>
+                                    ) : (
+                                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={handleResume}>
+                                            <Play size={12} /> Reanudar
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {currentSentence && (
+                                <div className="glass-card" style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.3)', fontSize: '0.8rem', borderLeft: '3px solid var(--secondary)' }}>
+                                    <p style={{ color: 'var(--text-muted)', marginBottom: '0.25rem', fontSize: '0.7rem', textTransform: 'uppercase' }}>Procesando ahora:</p>
+                                    <p style={{ color: 'white', fontStyle: 'italic' }}>"{currentSentence}..."</p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -532,6 +550,10 @@ const SimpleAudioGenerator = ({ voices }) => {
                 const data = await res.json()
                 if (data.total_segments > 0) setProgress(Math.round((data.completed_segments / data.total_segments) * 100))
                 setCurrentSentence(data.current_sentence || '')
+
+                if (data.status === 'processing') setStatus('processing')
+                if (data.status === 'paused') setStatus('paused')
+
                 if (data.status === 'completed') {
                     setStatus('done')
                     setProgress(100)
@@ -539,11 +561,26 @@ const SimpleAudioGenerator = ({ voices }) => {
                 } else if (data.status === 'error') {
                     setStatus('error')
                     setError(data.error_message)
-                } else {
+                } else if (data.status !== 'paused') {
                     setTimeout(() => pollStatus(id), 2000)
                 }
             }
         } catch (err) { console.error(err); setTimeout(() => pollStatus(id), 5000) }
+    }
+
+    const handlePause = async () => {
+        try {
+            await fetch(`http://localhost:8080/projects/${projectId}/pause`, { method: 'POST' })
+            setStatus('paused')
+        } catch (err) { console.error(err) }
+    }
+
+    const handleResume = async () => {
+        try {
+            await fetch(`http://localhost:8080/projects/${projectId}/resume`, { method: 'POST' })
+            setStatus('processing')
+            pollStatus(projectId)
+        } catch (err) { console.error(err) }
     }
 
     const handleGenerate = async () => {
@@ -591,21 +628,108 @@ const SimpleAudioGenerator = ({ voices }) => {
                     </div>
                 </div>
 
-                {status === 'processing' && (
+                {(status === 'processing' || status === 'paused') && (
                     <div style={{ marginBottom: '2rem' }}>
                         <div style={{ height: '10px', background: 'rgba(255,255,255,0.1)', borderRadius: '5px', overflow: 'hidden', marginBottom: '1rem' }}>
                             <div className="progress-bar-fill" style={{ width: `${progress}%`, height: '100%', background: 'var(--secondary)', transition: 'width 0.5s ease' }}></div>
                         </div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                            <Loader2 size={14} className="animate-spin" style={{ display: 'inline', marginRight: '0.5rem' }} />
-                            Procesando ({progress}%)
-                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                                {status === 'processing' ? (
+                                    <>
+                                        <Loader2 size={14} className="animate-spin" style={{ display: 'inline', marginRight: '0.5rem' }} />
+                                        Generando audio... ({progress}%)
+                                    </>
+                                ) : (
+                                    <>
+                                        <Pause size={14} style={{ display: 'inline', marginRight: '0.5rem' }} />
+                                        Proceso pausado ({progress}%)
+                                    </>
+                                )}
+                            </p>
+                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                {status === 'processing' ? (
+                                    <button className="btn" onClick={handlePause}>
+                                        <Pause size={16} /> Pausar
+                                    </button>
+                                ) : (
+                                    <button className="btn btn-secondary" onClick={handleResume}>
+                                        <Play size={16} /> Reanudar
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        {currentSentence && (
+                            <div className="glass-card" style={{ padding: '1rem', background: 'rgba(0,0,0,0.3)', borderLeft: '4px solid var(--secondary)' }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Frase actual:</p>
+                                <p style={{ color: 'white', lineHeight: '1.6' }}>"{currentSentence}..."</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                <button className="btn btn-primary" style={{ width: '100%', background: 'var(--secondary)' }} onClick={handleGenerate} disabled={status === 'processing' || !file || !selectedVoice}>
-                    {status === 'processing' ? 'Procesando...' : 'Empezar Generación'}
+                <button className="btn btn-primary" style={{ width: '100%', background: 'var(--secondary)' }} onClick={handleGenerate} disabled={status === 'processing' || status === 'paused' || !file || !selectedVoice}>
+                    {status === 'processing' ? 'Procesando...' : status === 'paused' ? 'Pausado' : 'Empezar Generación'}
                 </button>
+            </div>
+        </section>
+    )
+}
+
+const ProjectHistory = () => {
+    const [projects, setProjects] = useState([])
+    const [loading, setLoading] = useState(true)
+
+    const fetchProjects = async () => {
+        try {
+            const res = await fetch('http://localhost:8080/projects')
+            if (res.ok) {
+                const data = await res.json()
+                setProjects(data)
+            }
+        } catch (err) { console.error(err) }
+        setLoading(false)
+    }
+
+    useEffect(() => {
+        fetchProjects()
+        const interval = setInterval(fetchProjects, 5000)
+        return () => clearInterval(interval)
+    }, [])
+
+    if (loading && projects.length === 0) return null
+
+    return (
+        <section style={{ marginTop: '4rem', paddingBottom: '4rem' }}>
+            <h3 style={{ fontSize: '1.25rem', color: 'var(--text-muted)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Clock size={18} /> Proyectos Recientes
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {projects.map(p => (
+                    <div key={p.id} className="glass-card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: p.status === 'completed' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {p.status === 'completed' ? <CheckCircle2 size={20} color="#10b981" /> : <Clock size={20} color="var(--text-muted)" />}
+                            </div>
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: '0.9rem' }}>{p.title}</h4>
+                                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                    {p.is_multi_voice ? 'Multi-voz' : 'Sencillo'} • {p.status === 'completed' ? 'Completado' : p.status === 'processing' ? 'Procesando...' : p.status === 'paused' ? 'Pausado' : 'Error'}
+                                    {p.status === 'processing' && ` (${Math.round((p.completed_segments / p.total_segments) * 100)}%)`}
+                                </p>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            {p.status === 'completed' && (
+                                <a href={`http://localhost:8080/projects/${p.id}/download`} className="btn" style={{ padding: '4px 12px', fontSize: '0.75rem', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#10b981' }}>
+                                    <Download size={14} /> Descargar
+                                </a>
+                            )}
+                            {p.status === 'error' && <p style={{ color: '#ef4444', fontSize: '0.7rem' }}>Error</p>}
+                        </div>
+                    </div>
+                ))}
+                {projects.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center' }}>No hay proyectos previos.</p>}
             </div>
         </section>
     )
@@ -707,6 +831,9 @@ function App() {
                             <BookGenerator voices={voices} />
                         </section>
                     )}
+
+                    {/* Historial de Proyectos */}
+                    <ProjectHistory />
                 </div>
             </div>
 
