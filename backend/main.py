@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from pydub import AudioSegment
 import os
 import shutil
 import requests
@@ -9,6 +11,7 @@ import models
 from models import SessionLocal, init_db
 import wave
 import re
+import io
 from fastapi.responses import FileResponse, StreamingResponse
 
 # Initialize database
@@ -283,6 +286,144 @@ async def generate_from_txt(
     background_tasks.add_task(process_audiobook_task, new_project.id, voice_id, sentences)
 
     return {"project_id": new_project.id, "message": "Generation started"}
+
+class MultiVoiceRequest(BaseModel):
+    text: str
+    mappings: dict  # { tag: voice_id }
+    default_voice_id: int
+
+@app.post("/generate-multi-voice")
+async def generate_multi_voice(
+    req: MultiVoiceRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    # Parse text into segments
+    parts = re.split(r'(<[^>]+>[^<]*</[^>]+>)', req.text)
+    raw_segments = []
+    
+    for part in parts:
+        if not part.strip(): continue
+        
+        match = re.match(r'<([^>]+)>(.*)</\1>', part, re.DOTALL)
+        if match:
+            tag = match.group(1)
+            content = match.group(2).strip()
+            voice_id_raw = req.mappings.get(tag)
+            voice_id = int(voice_id_raw) if voice_id_raw else req.default_voice_id
+            if content:
+                raw_segments.append({"text": content, "voice_id": voice_id})
+        else:
+            content = part.strip()
+            if content:
+                raw_segments.append({"text": content, "voice_id": int(req.default_voice_id)})
+
+    if not raw_segments:
+        raise HTTPException(status_code=400, detail="No text fragments found to generate.")
+
+    # Split into sentences for memory efficiency
+    final_segments = []
+    for seg in raw_segments:
+        # Split by . ! ? while keeping the punctuation
+        sentences = re.split(r'([.!?]+)', seg["text"])
+        current_sentence = ""
+        for i in range(0, len(sentences), 2):
+            text = sentences[i].strip()
+            punct = sentences[i+1] if i+1 < len(sentences) else ""
+            if text:
+                final_segments.append({"text": text + punct, "voice_id": seg["voice_id"]})
+
+    # Create project record
+    new_project = models.AudiobookProject(
+        title=f"Libro Multi-voz {uuid.uuid4().hex[:6]}",
+        status="pending",
+        total_segments=len(final_segments)
+    )
+    db.add(new_project)
+    db.commit()
+    db.refresh(new_project)
+
+    background_tasks.add_task(process_multi_voice_task, new_project.id, final_segments)
+    return {"project_id": new_project.id, "message": "Multi-voice generation started"}
+
+def process_multi_voice_task(project_id: int, segments: list):
+    db = SessionLocal()
+    try:
+        project = db.query(models.AudiobookProject).filter(models.AudiobookProject.id == project_id).first()
+        if not project: return
+        
+        project.status = "processing"
+        db.commit()
+
+        project_dir = os.path.join("/data/output", str(project_id))
+        os.makedirs(project_dir, exist_ok=True)
+        final_wav_path = os.path.join(project_dir, "temp_final.wav")
+        final_mp3_path = os.path.join(project_dir, "final_audio.mp3")
+        
+        combined_audio = AudioSegment.empty()
+        silence = AudioSegment.silent(duration=400) # 400ms pause
+
+        for i, seg in enumerate(segments):
+            project.current_sentence = seg["text"]
+            project.completed_segments = i
+            db.commit()
+
+            voice = db.query(models.Voice).filter(models.Voice.id == seg["voice_id"]).first()
+            if not voice: continue
+
+            ref_audio_container_path = voice.reference_audio_path.replace("/data/voices", "/voice")
+
+            try:
+                response = requests.post(
+                    f"{TTS_ENGINE_URL}/tts",
+                    json={
+                        "text": seg["text"],
+                        "language": "Spanish",
+                        "ref_audio": ref_audio_container_path,
+                        "ref_text": voice.reference_text
+                    },
+                    timeout=300
+                )
+                
+                if response.status_code == 200:
+                    # Load as AudioSegment
+                    seg_audio = AudioSegment.from_file(io.BytesIO(response.content), format="wav")
+                    
+                    # Normalization to -20 dBFS
+                    change_in_dbfs = -20.0 - seg_audio.dBFS
+                    seg_audio = seg_audio.apply_gain(change_in_dbfs)
+                    
+                    # Add to combined
+                    if len(combined_audio) > 0:
+                        combined_audio += silence
+                    combined_audio += seg_audio
+                    
+                else:
+                    print(f"Error in segment {i}: {response.text}")
+            except Exception as e:
+                print(f"Exception in segment {i}: {e}")
+
+        if len(combined_audio) > 0:
+            # Export to MP3
+            combined_audio.export(final_mp3_path, format="mp3", bitrate="192k")
+            project.output_path = final_mp3_path
+            project.status = "completed"
+            project.completed_segments = len(segments)
+        else:
+            project.status = "error"
+            project.error_message = "Could not generate any audio segments."
+
+        project.current_sentence = None
+        db.commit()
+
+    except Exception as e:
+        print(f"Multi-voice task error: {e}")
+        if project:
+            project.status = "error"
+            project.error_message = str(e)
+            db.commit()
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     import uvicorn

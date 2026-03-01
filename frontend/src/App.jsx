@@ -1,23 +1,53 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Mic, BookOpen, Music, Activity, Trash2, Play, X, Upload, CheckCircle2, Download, Volume2, Loader2 } from 'lucide-react'
 
-const Navbar = () => (
+const Navbar = ({ onToggleSidebar }) => (
     <nav className="header">
-        <div>
-            <h1 style={{ fontSize: '2rem', background: 'linear-gradient(to right, #818cf8, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Audiobook AI
-            </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Generación local multi-voz</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button className="btn" style={{ padding: '8px' }} onClick={onToggleSidebar}>
+                <BookOpen size={24} />
+            </button>
+            <div>
+                <h1 style={{ fontSize: '1.5rem', background: 'linear-gradient(to right, #818cf8, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>
+                    Audiobook AI
+                </h1>
+            </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
             <button className="btn btn-primary" onClick={() => window.location.reload()}>
-                <Activity size={18} /> Dashboard
+                <Activity size={18} /> Sync
             </button>
         </div>
     </nav>
 )
 
+const Sidebar = ({ activeView, setActiveView, isOpen }) => {
+    const menuItems = [
+        { id: 'voices', label: 'Clonar Voces', icon: <Mic size={20} /> },
+        { id: 'audio', label: 'Crear Audio', icon: <Volume2 size={20} /> },
+        { id: 'book', label: 'Crear Libro', icon: <BookOpen size={20} /> },
+    ]
+
+    return (
+        <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+            <div className="sidebar-content">
+                {menuItems.map(item => (
+                    <button
+                        key={item.id}
+                        className={`sidebar-item ${activeView === item.id ? 'active' : ''}`}
+                        onClick={() => setActiveView(item.id)}
+                    >
+                        {item.icon}
+                        <span>{item.label}</span>
+                    </button>
+                ))}
+            </div>
+        </aside>
+    )
+}
+
 const VoiceCard = ({ voice, onTest, onDelete }) => (
+    // ... (resto del código igual hasta App)
     <div className="glass-card animate-fade-in">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
             <h3 style={{ fontSize: '1.25rem' }}>{voice.name}</h3>
@@ -267,7 +297,226 @@ const TestVoiceModal = ({ isOpen, voice, onClose }) => {
     )
 }
 
-const ProjectGenerator = ({ voices }) => {
+const BookGenerator = ({ voices }) => {
+    const [text, setText] = useState(() => localStorage.getItem('book_text') || '')
+    const [mappings, setMappings] = useState(() => {
+        const saved = localStorage.getItem('book_mappings')
+        return saved ? JSON.parse(saved) : {}
+    })
+    const [defaultVoice, setDefaultVoice] = useState(() => localStorage.getItem('book_default_voice') || '')
+    const [status, setStatus] = useState('idle') // idle, processing, done, error
+    const [progress, setProgress] = useState(0)
+    const [currentSentence, setCurrentSentence] = useState('')
+    const [error, setError] = useState(null)
+    const [projectId, setProjectId] = useState(null)
+
+    // Escanear etiquetas cuando el texto cambia
+    useEffect(() => {
+        localStorage.setItem('book_text', text)
+        const tags = [...text.matchAll(/<([^>]+)>/g)].map(m => m[1].replace('/', ''))
+        const uniqueTags = [...new Set(tags)]
+
+        setMappings(prev => {
+            const next = { ...prev }
+            uniqueTags.forEach(tag => {
+                if (!next[tag]) next[tag] = ''
+            })
+            // Limpiar tags que ya no existen
+            Object.keys(next).forEach(tag => {
+                if (!uniqueTags.includes(tag)) delete next[tag]
+            })
+            return next
+        })
+    }, [text])
+
+    useEffect(() => {
+        localStorage.setItem('book_mappings', JSON.stringify(mappings))
+    }, [mappings])
+
+    useEffect(() => {
+        localStorage.setItem('book_default_voice', defaultVoice)
+    }, [defaultVoice])
+
+    const pollStatus = async (id) => {
+        try {
+            const res = await fetch(`http://localhost:8080/projects/${id}`)
+            if (res.ok) {
+                const data = await res.json()
+                if (data.total_segments > 0) setProgress(Math.round((data.completed_segments / data.total_segments) * 100))
+                setCurrentSentence(data.current_sentence || '')
+
+                if (data.status === 'completed') {
+                    setStatus('done')
+                    setProgress(100)
+                    window.location.href = `http://localhost:8080/projects/${id}/download`
+                } else if (data.status === 'error') {
+                    setStatus('error')
+                    setError(data.error_message)
+                } else {
+                    setTimeout(() => pollStatus(id), 2000)
+                }
+            }
+        } catch (err) { console.error(err); setTimeout(() => pollStatus(id), 5000) }
+    }
+
+    const handleGenerate = async () => {
+        if (!text || !defaultVoice) return alert('Escribe algo y selecciona una voz para el narrador')
+
+        setStatus('processing')
+        setProgress(0)
+        setError(null)
+
+        try {
+            const res = await fetch('http://localhost:8080/generate-multi-voice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text,
+                    mappings,
+                    default_voice_id: defaultVoice
+                })
+            })
+
+            if (res.ok) {
+                const data = await res.json()
+                setProjectId(data.project_id)
+                pollStatus(data.project_id)
+            } else {
+                const errData = await res.json()
+                setError(errData.detail || 'Error desconocido')
+                setStatus('error')
+            }
+        } catch (err) {
+            console.error(err)
+            setError('Error de conexión')
+            setStatus('error')
+        }
+    }
+
+    return (
+        <section>
+            <h2 style={{ fontSize: '1.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
+                <BookOpen className="text-secondary" /> Generación de Libro Multi-voz
+            </h2>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', alignItems: 'start' }}>
+                <div className="glass-card" style={{ padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <label style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                            Contenido del Libro (usar &lt;personaje&gt;Texto&lt;/personaje&gt;)
+                        </label>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input
+                                type="file"
+                                accept=".txt"
+                                style={{ display: 'none' }}
+                                id="book-upload"
+                                onChange={(e) => {
+                                    const file = e.target.files[0]
+                                    if (file) {
+                                        const reader = new FileReader()
+                                        reader.onload = (ev) => setText(ev.target.result)
+                                        reader.readAsText(file)
+                                    }
+                                }}
+                            />
+                            <label htmlFor="book-upload" className="btn" style={{ padding: '4px 12px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.05)' }}>
+                                <Upload size={14} /> Subir .txt
+                            </label>
+                            <button className="btn" style={{ padding: '4px 12px', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }} onClick={() => { if (confirm('¿Vaciar todo el texto?')) setText('') }}>
+                                <Trash2 size={14} /> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                    <textarea
+                        className="glass-card"
+                        style={{ width: '100%', minHeight: '400px', background: 'rgba(0,0,0,0.2)', color: 'white', lineHeight: '1.8', fontSize: '1rem' }}
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Había una vez... <p1>¡Hola!</p1>"
+                    />
+                </div>
+
+                <div className="glass-card" style={{ padding: '1.5rem', position: 'sticky', top: '2rem' }}>
+                    <h3 style={{ marginBottom: '1.5rem', fontSize: '1.1rem' }}>Mapeo de Voces</h3>
+
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Voz por Defecto (Narrador)</label>
+                        <select
+                            className="glass-card"
+                            style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', color: 'white' }}
+                            value={defaultVoice}
+                            onChange={(e) => setDefaultVoice(e.target.value)}
+                        >
+                            <option value="">Seleccionar...</option>
+                            {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                    </div>
+
+                    {Object.keys(mappings).length > 0 && (
+                        <div style={{ padding: '1rem 0' }}>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1rem' }}>Personajes detectados:</p>
+                            {Object.keys(mappings).map(tag => (
+                                <div key={tag} style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.85rem' }}>&lt;{tag}&gt;</label>
+                                    <select
+                                        className="glass-card"
+                                        style={{ width: '100%', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', color: 'white' }}
+                                        value={mappings[tag]}
+                                        onChange={(e) => setMappings(prev => ({ ...prev, [tag]: e.target.value }))}
+                                    >
+                                        <option value="">Igual que Narrador</option>
+                                        {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                    </select>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <button
+                        className="btn btn-primary"
+                        style={{ width: '100%', marginTop: '1rem', background: 'var(--secondary)' }}
+                        onClick={handleGenerate}
+                        disabled={status === 'processing'}
+                    >
+                        {status === 'processing' ? 'Procesando...' : 'Generar Libro'}
+                    </button>
+
+                    {status === 'processing' && (
+                        <div style={{ marginTop: '1.5rem' }}>
+                            <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden', marginBottom: '0.5rem' }}>
+                                <div style={{ width: `${progress}%`, height: '100%', background: 'var(--secondary)', transition: 'width 0.5s' }}></div>
+                            </div>
+                            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{progress}% completado</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {status === 'done' && (
+                <div style={{ marginTop: '2rem' }} className="animate-fade-in">
+                    <div className="glass-card" style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981' }}>
+                        <p style={{ color: '#10b981', fontWeight: 'bold' }}>¡Libro generado con éxito!</p>
+                        <a href={`http://localhost:8080/projects/${projectId}/download`} className="btn btn-primary" style={{ marginTop: '1rem', background: '#10b981' }}>
+                            <Download size={18} /> Descargar Libro (MP3)
+                        </a>
+                    </div>
+                </div>
+            )}
+
+            {status === 'error' && (
+                <div style={{ marginTop: '2rem' }} className="animate-fade-in">
+                    <div className="glass-card" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>
+                        <p style={{ color: '#ef4444', fontWeight: 'bold' }}>Error: {error}</p>
+                        <button className="btn" onClick={() => setStatus('idle')} style={{ marginTop: '1rem' }}>Reintentar</button>
+                    </div>
+                </div>
+            )}
+        </section>
+    )
+}
+
+const SimpleAudioGenerator = ({ voices }) => {
     const [file, setFile] = useState(null)
     const [selectedVoice, setSelectedVoice] = useState('')
     const [status, setStatus] = useState('idle') // idle, processing, done, error
@@ -281,83 +530,52 @@ const ProjectGenerator = ({ voices }) => {
             const res = await fetch(`http://localhost:8080/projects/${id}`)
             if (res.ok) {
                 const data = await res.json()
-
-                if (data.total_segments > 0) {
-                    const p = Math.round((data.completed_segments / data.total_segments) * 100)
-                    setProgress(p)
-                }
+                if (data.total_segments > 0) setProgress(Math.round((data.completed_segments / data.total_segments) * 100))
                 setCurrentSentence(data.current_sentence || '')
-
                 if (data.status === 'completed') {
                     setStatus('done')
                     setProgress(100)
-                    // Auto download
                     window.location.href = `http://localhost:8080/projects/${id}/download`
                 } else if (data.status === 'error') {
                     setStatus('error')
                     setError(data.error_message)
                 } else {
-                    // Continue polling
                     setTimeout(() => pollStatus(id), 2000)
                 }
             }
-        } catch (err) {
-            console.error("Polling error", err)
-            setTimeout(() => pollStatus(id), 5000)
-        }
+        } catch (err) { console.error(err); setTimeout(() => pollStatus(id), 5000) }
     }
 
     const handleGenerate = async () => {
         if (!file || !selectedVoice) return alert('Selecciona un archivo y una voz')
-
-        setStatus('processing')
-        setProgress(0)
-        setError(null)
-        setCurrentSentence('')
-
+        setStatus('processing'); setProgress(0); setError(null); setCurrentSentence('')
         const formData = new FormData()
         formData.append('file', file)
         formData.append('voice_id', selectedVoice)
-
         try {
-            const res = await fetch('http://localhost:8080/generate-from-txt', {
-                method: 'POST',
-                body: formData
-            })
-
+            const res = await fetch('http://localhost:8080/generate-from-txt', { method: 'POST', body: formData })
             if (res.ok) {
                 const data = await res.json()
-                setProjectId(data.project_id)
-                pollStatus(data.project_id)
+                setProjectId(data.project_id); pollStatus(data.project_id)
             } else {
                 const errData = await res.json()
-                alert('Error al iniciar: ' + (errData.detail || 'Desconocido'))
+                alert('Error: ' + (errData.detail || 'Desconocido'))
                 setStatus('idle')
             }
-        } catch (err) {
-            console.error(err)
-            alert('Error de conexión')
-            setStatus('idle')
-        }
+        } catch (err) { console.error(err); alert('Error de conexión'); setStatus('idle') }
     }
 
     return (
         <section>
             <h2 style={{ fontSize: '1.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
-                <BookOpen className="text-secondary" /> Generación de Audiobooks (MVP TXT)
+                <Volume2 className="text-secondary" /> Generación de Audio (MVP TXT)
             </h2>
             <div className="glass-card" style={{ padding: '2rem' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
                     <div>
                         <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Archivo del libro (.txt)</label>
                         <div style={{ border: '2px dashed var(--glass-border)', borderRadius: '0.5rem', padding: '1rem', textAlign: 'center' }}>
-                            <input
-                                type="file"
-                                accept=".txt"
-                                onChange={(e) => setFile(e.target.files[0])}
-                                style={{ display: 'none' }}
-                                id="txt-file"
-                            />
+                            <input type="file" accept=".txt" onChange={(e) => setFile(e.target.files[0])} style={{ display: 'none' }} id="txt-file" />
                             <label htmlFor="txt-file" style={{ cursor: 'pointer' }}>
                                 <Upload size={24} style={{ color: 'var(--secondary)', marginBottom: '0.5rem' }} />
                                 <p style={{ fontSize: '0.875rem' }}>{file ? file.name : "Seleccionar TXT"}</p>
@@ -366,16 +584,9 @@ const ProjectGenerator = ({ voices }) => {
                     </div>
                     <div>
                         <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Voz del Narrador</label>
-                        <select
-                            className="glass-card"
-                            style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', color: 'white' }}
-                            value={selectedVoice}
-                            onChange={(e) => setSelectedVoice(e.target.value)}
-                        >
+                        <select className="glass-card" style={{ width: '100%', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', color: 'white' }} value={selectedVoice} onChange={(e) => setSelectedVoice(e.target.value)}>
                             <option value="">Selecciona una voz...</option>
-                            {voices.map(v => (
-                                <option key={v.id} value={v.id}>{v.name}</option>
-                            ))}
+                            {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                         </select>
                     </div>
                 </div>
@@ -385,85 +596,17 @@ const ProjectGenerator = ({ voices }) => {
                         <div style={{ height: '10px', background: 'rgba(255,255,255,0.1)', borderRadius: '5px', overflow: 'hidden', marginBottom: '1rem' }}>
                             <div className="progress-bar-fill" style={{ width: `${progress}%`, height: '100%', background: 'var(--secondary)', transition: 'width 0.5s ease' }}></div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                                <Loader2 size={14} className="animate-spin" style={{ display: 'inline', marginRight: '0.5rem' }} />
-                                Generando frase a frase ({progress}%)
-                            </p>
-                            <span className="badge badge-info" style={{ background: 'rgba(167, 139, 250, 0.1)', color: '#a78bfa' }}>
-                                {progress === 100 ? "Finalizando..." : "En proceso"}
-                            </span>
-                        </div>
-                        {currentSentence && (
-                            <div className="glass-card animate-pulse" style={{ padding: '1.25rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
-                                <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--secondary)', marginBottom: '0.5rem' }}>Tratando ahora:</p>
-                                <p style={{ fontStyle: 'italic', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                                    "{currentSentence.length > 150 ? currentSentence.substring(0, 150) + '...' : currentSentence}"
-                                </p>
-                            </div>
-                        )}
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                            <Loader2 size={14} className="animate-spin" style={{ display: 'inline', marginRight: '0.5rem' }} />
+                            Procesando ({progress}%)
+                        </p>
                     </div>
                 )}
 
-                {status === 'error' && (
-                    <div style={{ textAlign: 'center', padding: '1.5rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '0.5rem', marginBottom: '2rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                        <p style={{ color: '#f87171', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 'bold' }}>
-                            <X size={20} /> Error en la generación
-                        </p>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.5rem' }}>{error}</p>
-                        <button className="btn btn-primary" style={{ marginTop: '1rem', background: 'rgba(239, 68, 68, 0.2)', color: 'white' }} onClick={() => setStatus('idle')}>
-                            Reintentar
-                        </button>
-                    </div>
-                )}
-
-                {status === 'done' && (
-                    <div style={{ textAlign: 'center', padding: '1.5rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '0.5rem', marginBottom: '2rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                        <p style={{ color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '1.1rem', fontWeight: 'bold' }}>
-                            <CheckCircle2 size={24} /> ¡Audiolibro completado!
-                        </p>
-                        <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem', marginBottom: '1.5rem' }}>
-                            La descarga debería haber comenzado automáticamente.
-                        </p>
-                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                            <a href={`http://localhost:8080/projects/${projectId}/download`} className="btn btn-primary" style={{ background: '#10b981', textDecoration: 'none' }}>
-                                <Download size={18} /> Descargar de nuevo
-                            </a>
-                            <button className="btn" onClick={() => setStatus('idle')}>
-                                Nueva generación
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <button
-                    className="btn btn-primary"
-                    style={{ width: '100%', background: 'var(--secondary)', border: 'none' }}
-                    onClick={handleGenerate}
-                    disabled={status === 'processing' || !file || !selectedVoice}
-                >
+                <button className="btn btn-primary" style={{ width: '100%', background: 'var(--secondary)' }} onClick={handleGenerate} disabled={status === 'processing' || !file || !selectedVoice}>
                     {status === 'processing' ? 'Procesando...' : 'Empezar Generación'}
                 </button>
             </div>
-
-            <style>{`
-                .progress-bar-fill {
-                    background: linear-gradient(90deg, var(--secondary) 25%, #a78bfa 50%, var(--secondary) 75%);
-                    background-size: 200% 100%;
-                    animation: progress-move 2s linear infinite;
-                }
-                @keyframes progress-move {
-                    0% { background-position: 200% 0; }
-                    100% { background-position: -200% 0; }
-                }
-                .animate-pulse {
-                    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-                }
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.7; }
-                }
-            `}</style>
         </section>
     )
 }
@@ -473,6 +616,8 @@ function App() {
     const [loading, setLoading] = useState(true)
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
     const [testVoice, setTestVoice] = useState(null)
+    const [activeView, setActiveView] = useState('voices') // voices, audio, book
+    const [sidebarOpen, setSidebarOpen] = useState(true)
 
     const fetchVoices = () => {
         setLoading(true)
@@ -501,47 +646,69 @@ function App() {
     }
 
     return (
-        <div className="container">
-            <Navbar />
+        <div className="main-layout">
+            <Sidebar
+                activeView={activeView}
+                setActiveView={setActiveView}
+                isOpen={sidebarOpen}
+            />
 
-            <section style={{ marginBottom: '4rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                    <h2 style={{ fontSize: '1.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <Music className="text-primary" /> Catálogo de Voces
-                    </h2>
-                    <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
-                        <Plus size={18} /> Nueva Voz
-                    </button>
-                </div>
+            <div className="content-area">
+                <Navbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
-                {loading ? (
-                    <div style={{ textAlign: 'center', padding: '4rem' }}>
-                        <Loader2 size={32} className="animate-spin" color="var(--primary)" style={{ margin: '0 auto' }} />
-                        <p style={{ color: 'var(--text-muted)', marginTop: '1rem' }}>Cargando catálogo...</p>
-                    </div>
-                ) : (
-                    <div className="grid">
-                        {voices.length > 0 ? (
-                            voices.map(v => (
-                                <VoiceCard
-                                    key={v.id}
-                                    voice={v}
-                                    onTest={() => setTestVoice(v)}
-                                    onDelete={handleDelete}
-                                />
-                            ))
-                        ) : (
-                            <div className="glass-card" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem' }}>
-                                <Mic size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
-                                <h3>No hay voces registradas</h3>
-                                <p style={{ color: 'var(--text-muted)' }}>Sube un fragmento de audio para empezar</p>
+                <div className="container">
+                    {activeView === 'voices' && (
+                        <section className="animate-fade-in">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                                <h2 style={{ fontSize: '1.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <Music className="text-primary" /> Catálogo de Voces
+                                </h2>
+                                <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
+                                    <Plus size={18} /> Nueva Voz
+                                </button>
                             </div>
-                        )}
-                    </div>
-                )}
-            </section>
 
-            <ProjectGenerator voices={voices} />
+                            {loading ? (
+                                <div style={{ textAlign: 'center', padding: '4rem' }}>
+                                    <Loader2 size={32} className="animate-spin" color="var(--primary)" style={{ margin: '0 auto' }} />
+                                    <p style={{ color: 'var(--text-muted)', marginTop: '1rem' }}>Cargando catálogo...</p>
+                                </div>
+                            ) : (
+                                <div className="grid">
+                                    {voices.length > 0 ? (
+                                        voices.map(v => (
+                                            <VoiceCard
+                                                key={v.id}
+                                                voice={v}
+                                                onTest={() => setTestVoice(v)}
+                                                onDelete={handleDelete}
+                                            />
+                                        ))
+                                    ) : (
+                                        <div className="glass-card" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem' }}>
+                                            <Mic size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+                                            <h3>No hay voces registradas</h3>
+                                            <p style={{ color: 'var(--text-muted)' }}>Sube un fragmento de audio para empezar</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </section>
+                    )}
+
+                    {activeView === 'audio' && (
+                        <section className="animate-fade-in">
+                            <SimpleAudioGenerator voices={voices} />
+                        </section>
+                    )}
+
+                    {activeView === 'book' && (
+                        <section className="animate-fade-in">
+                            <BookGenerator voices={voices} />
+                        </section>
+                    )}
+                </div>
+            </div>
 
             <AddVoiceModal
                 isOpen={isAddModalOpen}
