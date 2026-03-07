@@ -246,7 +246,7 @@ export default function AudiobooksPage() {
     // Enrich audiobooks with book title
     const enriched = audiobooks.map(ab => ({
         ...ab,
-        bookTitle: books.find(b => b.id === ab.book_id)?.title || `Libro #${ab.book_id}`,
+        bookTitle: books.find(b => b.id === ab.book_id)?.title || (ab.book_id ? `Libro #${ab.book_id}` : 'Libro (eliminado)'),
         narratorName: voices.find(v => v.id === ab.narrator_voice_id)?.name || `Voz #${ab.narrator_voice_id}`,
     }))
 

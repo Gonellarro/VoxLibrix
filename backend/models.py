@@ -45,7 +45,7 @@ class Book(Base):
 class Audiobook(Base):
     __tablename__ = "audiobook"
     id = Column(Integer, primary_key=True, index=True)
-    book_id = Column(Integer, ForeignKey("book.id", ondelete="CASCADE"), nullable=False)
+    book_id = Column(Integer, ForeignKey("book.id", ondelete="SET NULL"), nullable=True)
     narrator_voice_id = Column(Integer, ForeignKey("voice.id"), nullable=False)
     output_format = Column(String(10), default="mp3")
     final_audio_path = Column(String(500))
