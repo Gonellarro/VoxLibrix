@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import VoicesPage from './pages/VoicesPage.jsx'
 import BooksPage from './pages/BooksPage.jsx'
 import AudiobooksPage from './pages/AudiobooksPage.jsx'
@@ -28,9 +28,9 @@ const PAGES = [
     },
 ]
 
-function Sidebar({ current, onChange }) {
+function Sidebar({ current, onChange, collapsed, mobileOpen, onClose }) {
     return (
-        <nav className="sidebar">
+        <nav className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'open' : ''}`}>
             <div className="sidebar-logo">
                 <div className="logo-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>
@@ -41,10 +41,13 @@ function Sidebar({ current, onChange }) {
                 <button
                     key={p.id}
                     className={`nav-item ${current === p.id ? 'active' : ''}`}
-                    onClick={() => onChange(p.id)}
+                    onClick={() => {
+                        onChange(p.id);
+                        if (mobileOpen) onClose();
+                    }}
                 >
                     {p.icon}
-                    {p.label}
+                    <span>{p.label}</span>
                 </button>
             ))}
         </nav>
@@ -53,10 +56,36 @@ function Sidebar({ current, onChange }) {
 
 export default function App() {
     const [page, setPage] = useState('voices')
+    const [isCollapsed, setIsCollapsed] = useState(false)
+    const [isMobileOpen, setIsMobileOpen] = useState(false)
+
+    useEffect(() => {
+        const theme = localStorage.getItem('vox-theme');
+        if (theme) document.documentElement.setAttribute('data-theme', theme);
+    }, [])
 
     return (
         <div className="app-layout">
-            <Sidebar current={page} onChange={setPage} />
+            <button className="sidebar-toggle" onClick={() => {
+                if (window.innerWidth <= 768) {
+                    setIsMobileOpen(!isMobileOpen);
+                } else {
+                    setIsCollapsed(!isCollapsed);
+                }
+            }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+            </button>
+
+            <Sidebar
+                current={page}
+                onChange={setPage}
+                collapsed={isCollapsed}
+                mobileOpen={isMobileOpen}
+                onClose={() => setIsMobileOpen(false)}
+            />
+
+            {isMobileOpen && <div className="modal-overlay" style={{ zIndex: 999 }} onClick={() => setIsMobileOpen(false)} />}
+
             <main className="main-content">
                 {page === 'voices' && <VoicesPage />}
                 {page === 'authors' && <AuthorsPage />}
