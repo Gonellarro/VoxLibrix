@@ -5,7 +5,7 @@ from sqlalchemy import update
 
 from database import AsyncSessionLocal
 import models
-from routers import voices, books, audiobooks, authors
+from routers import voices, books, audiobooks, authors, admin
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin.router, prefix="/admin", tags=["Administración"])
 app.include_router(authors.router, prefix="/authors", tags=["Escritores"])
 app.include_router(voices.router, prefix="/voices", tags=["Voces"])
 app.include_router(books.router, prefix="/books", tags=["Libros"])

@@ -19,6 +19,20 @@ async function req(method, path, body, isForm = false) {
     return res.json()
 }
 
+async function reqBlob(method, path, body) {
+    const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    }
+    const res = await fetch(BASE + path, opts)
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }))
+        throw new Error(err.detail || 'Error del servidor')
+    }
+    return res.blob()
+}
+
 // ── Voices ────────────────────────────────────────────────────────────────────
 export const api = {
     voices: {
@@ -28,6 +42,7 @@ export const api = {
         update: (id, form) => req('PUT', `/voices/${id}`, form, true),
         delete: (id) => req('DELETE', `/voices/${id}`),
         sampleUrl: (id) => `${BASE}/voices/${id}/sample`,
+        test: (id, text) => reqBlob('POST', `/voices/${id}/test`, { text }),
     },
 
     books: {
@@ -55,5 +70,13 @@ export const api = {
         progress: (id) => req('GET', `/audiobooks/${id}/progress`),
         mappings: (id) => req('GET', `/audiobooks/${id}/mappings`),
         downloadUrl: (id, fmt) => `${BASE}/audiobooks/${id}/download`,
+    },
+
+    admin: {
+        stats: () => req('GET', '/admin/stats'),
+        backups: () => req('GET', '/admin/backups'),
+        createBackup: () => req('POST', '/admin/backup'),
+        deleteBackup: (filename) => req('DELETE', `/admin/backups/${filename}`),
+        downloadBackupUrl: (filename) => `${BASE}/admin/backups/download/${filename}`,
     },
 }

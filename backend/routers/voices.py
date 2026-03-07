@@ -1,14 +1,17 @@
 import os
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import models, schemas
 from database import get_db
+from services.generator import backend_to_tts_path
 
 router = APIRouter()
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
+TTS_URL = os.environ.get("TTS_ENGINE_URL", "http://tts-engine:8000")
 
 
 @router.get("", response_model=list[schemas.VoiceResponse])
@@ -135,3 +138,23 @@ async def get_sample(voice_id: int, db: AsyncSession = Depends(get_db)):
     if not v or not os.path.exists(v.sample_path):
         raise HTTPException(404, "Sample no encontrado")
     return FileResponse(v.sample_path, media_type="audio/wav")
+
+
+@router.post("/{voice_id}/test")
+async def test_voice(voice_id: int, payload: schemas.VoiceTestRequest, db: AsyncSession = Depends(get_db)):
+    v = await db.get(models.Voice, voice_id)
+    if not v:
+        raise HTTPException(404, "Voz no encontrada")
+    
+    async with httpx.AsyncClient(timeout=600) as client:
+        try:
+            resp = await client.post(f"{TTS_URL}/tts", json={
+                "text": payload.text,
+                "language": "Spanish",
+                "ref_audio": backend_to_tts_path(v.sample_path),
+                "ref_text": v.model_ref or "",
+            })
+            resp.raise_for_status()
+            return Response(content=resp.content, media_type="audio/wav")
+        except Exception as e:
+            raise HTTPException(500, f"Error en motor TTS: {str(e)}")

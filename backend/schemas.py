@@ -37,6 +37,10 @@ class VoiceResponse(BaseModel):
         from_attributes = True
 
 
+class VoiceTestRequest(BaseModel):
+    text: str
+
+
 # ── Books ────────────────────────────────────────────────────────────────────
 
 class BookResponse(BaseModel):

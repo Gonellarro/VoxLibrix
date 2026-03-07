@@ -120,9 +120,69 @@ function VoiceModal({ voice, onClose, onSaved, addToast }) {
     )
 }
 
+function TestVoiceModal({ voice, onClose, addToast }) {
+    const [text, setText] = useState('Esta es una prueba de voz para comprobar la calidad de la clonación en tiempo real.')
+    const [loading, setLoading] = useState(false)
+    const [audioUrl, setAudioUrl] = useState(null)
+
+    async function generateTest() {
+        if (!text.trim()) return addToast('Escribe un texto para probar', 'error')
+        setLoading(true)
+        setAudioUrl(null)
+        try {
+            const blob = await api.voices.test(voice.id, text)
+            const url = URL.createObjectURL(blob)
+            setAudioUrl(url)
+            addToast('Prueba generada con éxito', 'success')
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+                <h2 className="modal-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M10 8l6 4-6 4V8z" /></svg>
+                    Probar voz: {voice.name}
+                </h2>
+
+                <div className="form-group">
+                    <label className="form-label">Texto de prueba</label>
+                    <textarea
+                        className="form-input"
+                        rows="4"
+                        style={{ minHeight: 100, padding: '10px' }}
+                        value={text}
+                        onChange={e => setText(e.target.value)}
+                        placeholder="Escribe lo que quieras que la voz diga..."
+                    />
+                </div>
+
+                {audioUrl && (
+                    <div style={{ marginTop: 16 }}>
+                        <label className="form-label">Resultado de audio</label>
+                        <audio src={audioUrl} controls autoPlay style={{ width: '100%' }} />
+                    </div>
+                )}
+
+                <div className="modal-footer">
+                    <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+                    <button className="btn btn-primary" onClick={generateTest} disabled={loading}>
+                        {loading ? 'Generando audio...' : 'Generar prueba'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export default function VoicesPage() {
     const [voices, setVoices] = useState([])
     const [editVoice, setEditVoice] = useState(undefined)
+    const [testVoice, setTestVoice] = useState(undefined)
     const [toasts, setToasts] = useState([])
 
     function addToast(msg, type = 'info') {
@@ -192,6 +252,10 @@ export default function VoicesPage() {
                             </div>
                             <audio src={api.voices.sampleUrl(v.id)} controls />
                             <div className="card-actions">
+                                <button className="btn btn-primary btn-sm" onClick={() => setTestVoice(v)}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}><path d="M10 8l6 4-6 4V8z" /></svg>
+                                    Probar
+                                </button>
                                 <button className="btn btn-ghost btn-sm" onClick={() => setEditVoice(v)}>Editar</button>
                                 <button className="btn btn-danger btn-sm" onClick={() => remove(v)}>Eliminar</button>
                             </div>
@@ -205,6 +269,14 @@ export default function VoicesPage() {
                     voice={editVoice}
                     onClose={() => setEditVoice(undefined)}
                     onSaved={() => { setEditVoice(undefined); load() }}
+                    addToast={addToast}
+                />
+            )}
+
+            {testVoice !== undefined && (
+                <TestVoiceModal
+                    voice={testVoice}
+                    onClose={() => setTestVoice(undefined)}
                     addToast={addToast}
                 />
             )}
