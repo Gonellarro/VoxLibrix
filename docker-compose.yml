@@ -2,6 +2,7 @@ services:
   tts-engine:
     build: ./tts-engine
     container_name: tts-engine
+    user: "1000:1000"
     expose:
       - "8000"
     volumes:
@@ -9,43 +10,55 @@ services:
       - ./data/voices:/voice
     environment:
       - TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base
-      - REF_AUDIO=/voice/test_voice/referencia.mp3
+      - REF_AUDIO=/voice/referencia.mp3
       - REF_TEXT=Prólogo. Mar de Noruega. Año aproximado, 1200 después de Cristo. El barco de pesca había salido de su ruta habitual. Eric y su hijo Hans habían salido a faenar al norte de su poblado natal, Blake. Esos días había habido mucha corriente y poco viento, lo que los alejó bastante de la zona de pesca del bacalao.
+      - HF_HOME=/models
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 4g
 
-  db:
-    image: mysql:8.0
-    container_name: audiobook-db
+  postgres:
+    image: postgres:16-alpine
+    container_name: audiobook-postgres
     restart: unless-stopped
     environment:
-      - MYSQL_DATABASE=audiobooks
-      - MYSQL_ROOT_PASSWORD=audio_pass
+      - POSTGRES_DB=audiobooks
+      - POSTGRES_USER=audio_user
+      - POSTGRES_PASSWORD=audio_pass
     volumes:
-      - ./data/mysql:/var/lib/mysql
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./data/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     expose:
-      - "3306"
+      - "5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U audio_user -d audiobooks" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./backend
     container_name: audiobook-backend
+    user: "1000:1000"
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/data
       - ./backend:/app
+      - ./data:/data
     environment:
-      - DATABASE_URL=mysql+pymysql://root:audio_pass@db/audiobooks
+      - DATABASE_URL=postgresql+asyncpg://audio_user:audio_pass@postgres/audiobooks
       - TTS_ENGINE_URL=http://tts-engine:8000
+      - DATA_DIR=/data
       - PYTHONUNBUFFERED=1
-    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
     depends_on:
-      - tts-engine
-      - db
+      postgres:
+        condition: service_healthy
+      tts-engine:
+        condition: service_started
     restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
   frontend:
     build: ./frontend
@@ -55,5 +68,5 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    command: npm run dev
+    command: npm run dev -- --host
     restart: unless-stopped

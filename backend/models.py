@@ -1,114 +1,85 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-import datetime
-import os
-import logging
-import sys
+from datetime import datetime, date
+from typing import Optional, List
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, UniqueConstraint, DateTime, Date
+from sqlalchemy.orm import relationship
+from database import Base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./audiobooks.db")
 
-# SQLite needs check_same_thread: False, but MySQL doesn't
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    engine = create_engine(DATABASE_URL)
+class Author(Base):
+    __tablename__ = "author"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    biography = Column(Text)
+    birth_date = Column(Date)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    books = relationship("Book", back_populates="author")
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Configure a local logger for models
-logging.basicConfig(level=logging.INFO)
-db_logger = logging.getLogger("db_init")
-
-Base = declarative_base()
 
 class Voice(Base):
-    __tablename__ = "voices"
-
+# ... (rest of the file follows)
+    __tablename__ = "voice"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), unique=True, index=True)
-    reference_audio_path = Column(String(512))
-    reference_text = Column(Text)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+    gender = Column(String(20)) # masculine / feminine
+    language = Column(String(20), default="Spanish") # Spanish / English
+    sample_path = Column(String(500), nullable=False)
+    model_ref = Column(Text)  # ref_text para Qwen3-TTS
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
 
-class AudiobookProject(Base):
-    __tablename__ = "projects"
 
+class Book(Base):
+    __tablename__ = "book"
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(512), index=True)
-    status = Column(String(50), default="pending") # pending, processing, completed, error, paused
-    total_segments = Column(Integer, default=0)
-    completed_segments = Column(Integer, default=0)
-    last_processed_index = Column(Integer, default=-1)
-    current_sentence = Column(Text, nullable=True)
-    is_multi_voice = Column(Boolean, default=False)
-    output_path = Column(String(512), nullable=True)
-    error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-class AudioSegment(Base):
-    __tablename__ = "segments"
-
-    id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
-    voice_id = Column(Integer, ForeignKey("voices.id"))
-    text = Column(Text)
-    audio_path = Column(String(512), nullable=True)
-    position = Column(Integer)
-    status = Column(String(50), default="pending") # pending, done, error
-
-def init_db():
-    import time
-    from sqlalchemy import inspect, text
-    max_retries = 10
-    retry_count = 0
-    db_logger.info(f"Connecting to database: {DATABASE_URL}")
-    while retry_count < max_retries:
-        try:
-            # Try to connect
-            with engine.connect() as conn:
-                db_logger.info("Connection established, creating tables...")
-                Base.metadata.create_all(bind=engine)
-                
-                inspector = inspect(engine)
-                # Tables and their expected columns
-                expected_columns = {
-                    "voices": {
-                        "name": "VARCHAR(255)",
-                        "reference_audio_path": "VARCHAR(512)",
-                        "reference_text": "TEXT"
-                    },
-                    "projects": {
-                        "last_processed_index": "INTEGER DEFAULT -1",
-                        "is_multi_voice": "BOOLEAN DEFAULT FALSE",
-                        "current_sentence": "TEXT",
-                        "output_path": "VARCHAR(512)",
-                        "error_message": "TEXT"
-                    },
-                    "segments": {
-                        "status": "VARCHAR(50) DEFAULT 'pending'",
-                        "audio_path": "VARCHAR(512)"
-                    }
-                }
-                
-                for table_name, columns in expected_columns.items():
-                    if table_name in inspector.get_table_names():
-                        existing_cols = [c["name"] for c in inspector.get_columns(table_name)]
-                        for col_name, col_type in columns.items():
-                            if col_name not in existing_cols:
-                                db_logger.info(f"Migration: Adding column {col_name} to {table_name}")
-                                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))
-                conn.commit()
-
-            db_logger.info("Database initialized successfully")
-            return
-        except Exception as e:
-            retry_count += 1
-            db_logger.error(f"Database connection failed ({retry_count}/{max_retries}): {e}")
-            time.sleep(5)
+    title = Column(String(300), nullable=False)
+    author_id = Column(Integer, ForeignKey("author.id", ondelete="SET NULL"))
+    txt_path = Column(String(500), nullable=False)
+    type = Column(String(20), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
-    db_logger.critical("Could not connect to database after several retries")
+    author = relationship("Author", back_populates="books")
 
-if __name__ == "__main__":
-    init_db()
+
+class Audiobook(Base):
+    __tablename__ = "audiobook"
+    id = Column(Integer, primary_key=True, index=True)
+    book_id = Column(Integer, ForeignKey("book.id", ondelete="CASCADE"), nullable=False)
+    narrator_voice_id = Column(Integer, ForeignKey("voice.id"), nullable=False)
+    output_format = Column(String(10), default="mp3")
+    final_audio_path = Column(String(500))
+    status = Column(String(20), default="pending")
+    total_chunks = Column(Integer, default=0)
+    completed_chunks = Column(Integer, default=0)
+    error_message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resumed_at = Column(DateTime)
+    finished_at = Column(DateTime)
+
+    book = relationship("Book")
+    narrator_voice = relationship("Voice")
+
+
+class AudiobookVoiceMapping(Base):
+    __tablename__ = "audiobook_voice_mapping"
+    id = Column(Integer, primary_key=True, index=True)
+    audiobook_id = Column(Integer, ForeignKey("audiobook.id", ondelete="CASCADE"), nullable=False)
+    tag_name = Column(String(100), nullable=False)
+    voice_id = Column(Integer, ForeignKey("voice.id"), nullable=False)
+    __table_args__ = (UniqueConstraint("audiobook_id", "tag_name"),)
+
+
+class AudioChunk(Base):
+    __tablename__ = "audio_chunk"
+    id = Column(Integer, primary_key=True, index=True)
+    audiobook_id = Column(Integer, ForeignKey("audiobook.id", ondelete="CASCADE"), nullable=False)
+    voice_id = Column(Integer, ForeignKey("voice.id"), nullable=False)
+    sequence_order = Column(Integer, nullable=False)
+    tag_name = Column(String(100))
+    source_text = Column(Text, nullable=False)
+    audio_path = Column(String(500))
+    duration_ms = Column(Integer)
+    status = Column(String(20), default="pending")
+    error_message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)

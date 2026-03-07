@@ -8,9 +8,15 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y \
     libsndfile1 \
     ffmpeg \
+    sox \
+    libsox-fmt-all \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+RUN groupadd -g 1000 vox && \
+    useradd -u 1000 -g vox -m vox && \
+    chown vox:vox /app
 
 # Instalar PyTorch CPU primero (más pesado, así Docker lo cachea en capas)
 RUN pip install --no-cache-dir \
