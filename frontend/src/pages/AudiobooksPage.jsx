@@ -117,19 +117,34 @@ function CreateModal({ voices, books, onClose, onSaved, addToast }) {
 function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
     const [progress, setProgress] = useState(null)
     const [polling, setPolling] = useState(false)
+    const [elapsed, setElapsed] = useState(0)
 
     const fetchProgress = useCallback(async () => {
         try {
             const p = await api.audiobooks.progress(ab.id)
             setProgress(p)
             if (p.status === 'processing' || p.is_running) {
-                setTimeout(fetchProgress, 2000)
+                setTimeout(fetchProgress, 1500)
             } else {
                 setPolling(false)
                 if (p.status === 'done') onRefresh()
             }
         } catch { }
     }, [ab.id])
+
+    useEffect(() => {
+        let timer
+        if (polling || ab.status === 'processing') {
+            const start = ab.started_at ? new Date(ab.started_at).getTime() : Date.now()
+            timer = setInterval(() => {
+                setElapsed(Math.round((Date.now() - start) / 1000))
+            }, 1000)
+        } else if (ab.status === 'done' && ab.finished_at && ab.started_at) {
+            const diff = (new Date(ab.finished_at).getTime() - new Date(ab.started_at).getTime()) / 1000
+            setElapsed(Math.round(diff))
+        }
+        return () => clearInterval(timer)
+    }, [polling, ab.status, ab.started_at, ab.finished_at])
 
     useEffect(() => {
         if (ab.status === 'processing') {
@@ -140,12 +155,12 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
         }
     }, [ab.id, ab.status])
 
-    async function handleStart() {
+    async function handleStart(cloud = false) {
         try {
-            await api.audiobooks.start(ab.id)
+            await api.audiobooks.start(ab.id, cloud)
             setPolling(true)
             fetchProgress()
-            addToast('Generación iniciada', 'info')
+            addToast(cloud ? 'Generación iniciada en la Nube ☁️' : 'Generación iniciada localmente 🏠', 'info')
         } catch (e) { addToast(e.message, 'error') }
     }
 
@@ -160,16 +175,28 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
     const status = progress?.status ?? ab.status
     const isRunning = progress?.is_running ?? false
 
+    // Calcular métricas
+    const totalWords = ab.total_words || 0
+    const wordsPerSec = elapsed > 0 ? (totalWords / elapsed).toFixed(2) : 0
+    const secPerWord = totalWords > 0 ? (elapsed / totalWords).toFixed(2) : 0
+
     return (
         <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                 <div className="card-title" style={{ fontSize: 14 }}>ID #{ab.id}</div>
-                <span className={`badge badge-${status === 'pending' && isRunning ? 'processing' : status}`}>
-                    {isRunning ? 'Procesando' : status === 'pending' ? 'Pendiente' : status === 'done' ? 'Completado' : status === 'error' ? 'Error' : 'En curso'}
-                </span>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {elapsed > 0 && (
+                        <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
+                            ⏱ {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}
+                        </span>
+                    )}
+                    <span className={`badge badge-${status === 'pending' && isRunning ? 'processing' : status}`}>
+                        {isRunning ? 'Procesando' : status === 'pending' ? 'Pendiente' : status === 'done' ? 'Completado' : status === 'error' ? 'Error' : 'En curso'}
+                    </span>
+                </div>
             </div>
             <div className="card-meta">
-                Formato: {ab.output_format?.toUpperCase()} · Creado {new Date(ab.created_at).toLocaleDateString('es-ES')}
+                Formato: {ab.output_format?.toUpperCase()} · {totalWords} palabras
             </div>
 
             {(status !== 'pending' || progress?.total_chunks > 0) && (
@@ -181,6 +208,12 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
                     <div className="progress-bar">
                         <div className="progress-fill" style={{ width: `${pct}%` }} />
                     </div>
+                    {status === 'done' && elapsed > 0 && (
+                        <div style={{ fontSize: 11, marginTop: 4, color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Velocidad: {wordsPerSec} pal/s</span>
+                            <span>({secPerWord} s/pal)</span>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -196,9 +229,14 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
                 ) : isRunning ? (
                     <button className="btn btn-ghost btn-sm" onClick={handlePause}>⏸ Pausar</button>
                 ) : (
-                    <button className="btn btn-primary btn-sm" onClick={handleStart} disabled={status === 'error'}>
-                        ▶ {ab.completed_chunks > 0 ? 'Reanudar' : 'Generar'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => handleStart(false)} disabled={status === 'error'}>
+                            🏠 {ab.completed_chunks > 0 ? 'Reanudar' : 'Local'}
+                        </button>
+                        <button className="btn btn-accent btn-sm" onClick={() => handleStart(true)} disabled={status === 'error'}>
+                            ☁️ {ab.completed_chunks > 0 ? 'Nube' : 'Nube'}
+                        </button>
+                    </div>
                 )}
                 <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)}>Eliminar</button>
             </div>

@@ -52,8 +52,10 @@ class Audiobook(Base):
     status = Column(String(20), default="pending")
     total_chunks = Column(Integer, default=0)
     completed_chunks = Column(Integer, default=0)
+    total_words = Column(Integer, default=0)
     error_message = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime)
     resumed_at = Column(DateTime)
     finished_at = Column(DateTime)
 

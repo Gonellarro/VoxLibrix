@@ -88,9 +88,11 @@ class AudiobookResponse(BaseModel):
     status: str
     total_chunks: int
     completed_chunks: int
+    total_words: int = 0
     error_message: Optional[str]
     created_at: datetime
-    finished_at: Optional[datetime]
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -92,7 +92,7 @@ async def get_mappings(ab_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{ab_id}/start")
-async def start_generation(ab_id: int, db: AsyncSession = Depends(get_db)):
+async def start_generation(ab_id: int, use_cloud: bool = False, db: AsyncSession = Depends(get_db)):
     ab = await db.get(models.Audiobook, ab_id)
     if not ab:
         raise HTTPException(404, "Audiolibro no encontrado")
@@ -100,7 +100,14 @@ async def start_generation(ab_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(400, "El audiolibro ya está generado")
     if generator.is_running(ab_id):
         raise HTTPException(400, "La generación ya está en curso")
-    await generator.start(ab_id)
+    
+    # Marcamos el inicio de la generación para las métricas
+    from datetime import datetime
+    ab.started_at = datetime.utcnow()
+    ab.status = "processing"
+    await db.commit()
+    
+    await generator.start(ab_id, use_cloud=use_cloud)
     return {"ok": True, "status": "processing"}
 
 

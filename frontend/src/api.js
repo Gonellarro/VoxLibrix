@@ -65,7 +65,7 @@ export const api = {
         get: (id) => req('GET', `/audiobooks/${id}`),
         create: (body) => req('POST', '/audiobooks', body),
         delete: (id) => req('DELETE', `/audiobooks/${id}`),
-        start: (id) => req('POST', `/audiobooks/${id}/start`),
+        start: (id, cloud = false) => req('POST', `/audiobooks/${id}/start?use_cloud=${cloud}`),
         pause: (id) => req('POST', `/audiobooks/${id}/pause`),
         progress: (id) => req('GET', `/audiobooks/${id}/progress`),
         mappings: (id) => req('GET', `/audiobooks/${id}/mappings`),

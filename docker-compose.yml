@@ -50,6 +50,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://audio_user:audio_pass@postgres/audiobooks
       - TTS_ENGINE_URL=http://tts-engine:8000
+      - CLOUD_TTS_URL=https://marti-vich--voxlibrix-tts-tts-tts.modal.run
       - DATA_DIR=/data
       - PYTHONUNBUFFERED=1
     depends_on:
