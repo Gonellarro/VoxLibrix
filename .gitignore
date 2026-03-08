@@ -8,6 +8,8 @@ data/
 *.db
 *.wav
 *.mp3
+*.txt
+!backend/requirements.txt
 frontend/.env
 backend/.env
 # Modelos de IA (muy pesados)
