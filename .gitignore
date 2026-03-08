@@ -10,3 +10,20 @@ data/
 *.mp3
 frontend/.env
 backend/.env
+# Modelos de IA (muy pesados)
+data/models/
+hf_home/
+
+# Datos personales del usuario
+data/voices/
+data/audiobooks/
+books/
+voices/
+
+# Base de datos local
+data/postgres/
+
+# Entorno de python y node
+node_modules/
+__pycache__/
+.env
