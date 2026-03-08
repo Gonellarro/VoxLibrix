@@ -81,8 +81,8 @@ class AudiobookCreate(BaseModel):
 
 class AudiobookResponse(BaseModel):
     id: int
-    book_id: int
-    narrator_voice_id: int
+    book_id: Optional[int]
+    narrator_voice_id: Optional[int]
     output_format: str
     final_audio_path: Optional[str]
     status: str
