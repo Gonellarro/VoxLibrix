@@ -85,14 +85,29 @@ Hemos alcanzado la compatibilidad universal de hardware. VoxLibrix ahora puede c
 
 ---
 
-### Estado de Infraestructura
-- **Local (NVIDIA)**: Docker con CUDA 12.1 (Máximo rendimiento, coste 0€).
-- **Local (AMD/CPU)**: Docker con entorno CPU fallback.
-- **Cloud**: Modal.com (Pago por uso).
+## v0.3.1 - Estabilidad y Visión de Plataforma
+*Fecha: 2026-03-09*
 
-### Roadmap Actualizado
-- [x] **Soporte NVIDIA CUDA**: Motor listo para GPUs RTX.
-- [x] **Perfiles de Despliegue**: Un solo comando para cualquier S.O.
-- [ ] **Batch Processing (Súper Ahorro)**: Implementación final en el motor local (actualmente solo en Cloud).
-- [ ] **Soporte EPUB**: Parser automático de libros electrónicos.
-- [ ] **Multi-Tenancy**: Gestión de perfiles de usuario.
+Tras las pruebas de carga, hemos decidido priorizar la experiencia de usuario y la estabilidad sobre el ahorro marginal de costes.
+
+### 8. Simplificación y Estabilidad Cloud
+- **Reversión de Lotes (Batching)**: Se ha eliminado el envío de fragmentos en lote (8 a la vez). Aunque ahorraba un ~10% de coste, provocaba tiempos de espera de 7-8 minutos sin feedback visual y riesgo de *time-outs* en Modal.
+- **Fluidez "Real-Time"**: Volvemos a la generación fragmento a fragmento, garantizando que el usuario vea progreso constante en la interfaz.
+
+### 9. Nueva Visión: VoxLibrix Professional
+El proyecto pivota de ser un "creador de MP3s" a una **Plataforma de Conocimiento Técnico**.
+- **Enfoque en Oposiciones/Medicina/Legal**: Especialización de voces y estructuras para textos técnicos extensos.
+- **Ecosistema de Consumo**: El objetivo no es solo generar el archivo, sino ofrecer una interfaz estilo **iVoox/Audible** sincronizada entre dispositivos (PWA).
+
+---
+
+### Estado de Infraestructura
+- **Local (NVIDIA)**: Docker con CUDA 12.1 (Optimizado para RTX 5060, coste 0€).
+- **Local (AMD/CPU)**: Entorno de compatibilidad.
+- **Cloud**: Modal.com (Producción con GPU L4 Turbo).
+
+### Roadmap: La Ruta hacia el SaaS
+- [x] **Arquitectura Multi-Engine**: Listo para correr en cualquier PC o Servidor.
+- [ ] **Sistema de Usuarios & Auth**: Sincronización de bibliotecas privadas.
+- [ ] **Reproductor PWA**: Interfaz móvil para escuchar en movimiento (Coche/GYM).
+- [ ] **Ingesta de PDFs Técnicos**: Parser inteligente de apuntes y leyes.

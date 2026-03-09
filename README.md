@@ -51,14 +51,20 @@ Para probar el sistema en tu propia máquina:
 
 VoxLibrix detecta automáticamente tu hardware mediante perfiles de Docker Compose. Elige el comando según tu tarjeta gráfica:
 
-**Opción A: NVIDIA (Recomendado - RTX 20/30/40/50)**
-Si tienes una tarjeta NVIDIA (como tu RTX 5060), este modo usará **CUDA 12.1** para una generación ultrarrápida (gratis).
-```bash
-docker compose --profile nvidia up --build
-```
-*Nota: Requiere Windows 11 (WSL2) o Linux con NVIDIA Container Toolkit instalado.*
+#### A. NVIDIA (Recomendado - RTX 20/30/40/50)
+Ideal para tu **Windows 11 con RTX 5060**. Usa **CUDA 12.1** para generación ultrarrápida y gratuita.
 
-**Opción B: AMD / CPU (Modo de Compatibilidad)**
+**Pasos para Windows 11:**
+1.  **Drivers:** Instala los últimos [Drivers de NVIDIA](https://www.nvidia.com/download/index.aspx).
+2.  **WSL2:** Abre una terminal como administrador y ejecuta `wsl --install`. Reinicia el PC.
+3.  **Docker Desktop:** Instala [Docker Desktop](https://www.docker.com/products/docker-desktop/) y asegúrate de que en la configuración esté activado el "WSL 2 based engine".
+4.  **NVIDIA Container Toolkit:** Dentro de tu consola de WSL2 (ej: Ubuntu), instala el [Toolkit oficial](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+5.  **Lanzar:**
+    ```bash
+    docker compose --profile nvidia up --build
+    ```
+
+#### B. AMD / CPU (Modo de Compatibilidad)
 Si no tienes una NVIDIA, este modo usará la **CPU** (más lento) o la potencia de la **Nube (Modal)** si la tienes configurada.
 ```bash
 docker compose --profile amd up --build
