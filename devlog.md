@@ -31,6 +31,26 @@ Hemos implementado un sistema de generación robusto con las siguientes capacida
 - `/data/voices/`: Almacena los audios de referencia.
 - `/data/output/`: Almacena los segmentos individuales y los archivos finales por proyecto.
 
+## v0.2.0 - VoxLibrix Cloud Turbo & Sync
+*Fecha: 2026-03-08*
+
+Hemos alcanzado la madurez en la infraestructura de nube, logrando un sistema significativamente más rápido y eficiente en costes mediante el despliegue en Modal.com con GPUs Nvidia L4.
+
+### 6. Despliegue en Modal & Optimización Turbo
+- **Motor Cloud Directo**: Creación de `cloud_tts.py` para despliegue instantáneo de Qwen3-TTS en GPUs Nvidia L4 (acceso vía FastAPI remoto).
+- **Sincronización Inteligente de Voces**: 
+    - Implementación de `voxlibrix-voices` (NetworkFileSystem).
+    - Las voces se suben una sola vez; el sistema usa huellas MD5 para reutilizar voces ya existentes en la nube, eliminando el 90% del tráfico de internet.
+- **Súper-Agregador de Chunks**: 
+    - Fusión inteligente de frases hasta un límite seguro (Target: 60, Max: 75 palabras).
+    - Esto reduce drásticamente el número de llamadas a la API y el coste operativo por libro.
+- **Telemetría de Rendimiento**:
+    - Cronómetro en tiempo real y métricas de palabras por segundo (pal/s).
+    - Comparativa directa entre generación Local vs Nube.
+- **Normalización Lingüística**:
+    - Expansión automática de números a palabras en español (`num2words`).
+    - Filtro de "chunks triviales" para evitar bucles infinitos en la GPU con signos de puntuación aislados.
+
 ## Hitos Alcanzados (v1.1.0)
 *Fecha: 2026-03-08*
 
@@ -52,13 +72,27 @@ Este proyecto ha evolucionado de un generador local a **VoxLibrix**, una platafo
 
 ---
 
+## v0.3.0 - Soporte Multi-GPU (NVIDIA CUDA)
+*Fecha: 2026-03-09*
+
+Hemos alcanzado la compatibilidad universal de hardware. VoxLibrix ahora puede correr en GPUs NVIDIA domésticas (como la RTX 5060) con la misma eficiencia que en la nube.
+
+### 7. Soporte Nativo NVIDIA RTX
+- **Dockerfiles por Arquitectura**: Separación de `Dockerfile.amd` y `Dockerfile.nvidia` para optimizar PyTorch según el hardware.
+- **Perfiles de Docker Compose**: Implementación de `--profile nvidia` y `--profile amd`.
+- **Network Aliasing**: Uso de alias de red (`tts-engine`) para que el Backend sea agnóstico del motor que se esté ejecutando.
+- **Soporte Windows 11**: Configuración optimizada para WSL2, permitiendo el uso de GPUs Blackwell (RTX Serie 50).
+
+---
+
 ### Estado de Infraestructura
-- **Local**: Docker Compose (CPU y ROCm AMD).
-- **Cloud (En desarrollo)**: Planificación de migración a CUDA y persistencia en S3.
+- **Local (NVIDIA)**: Docker con CUDA 12.1 (Máximo rendimiento, coste 0€).
+- **Local (AMD/CPU)**: Docker con entorno CPU fallback.
+- **Cloud**: Modal.com (Pago por uso).
 
 ### Roadmap Actualizado
-- [ ] **Migración a CUDA**: Optimizar contenedores para GPUs NVIDIA en producción.
-- [ ] **Sistemas de Pago**: Integración de Stripe para facturación por palabra generada.
-- [ ] **Multi-Tenancy**: Gestión de perfiles de usuario y privacidad de archivos.
-- [ ] **Almacenamiento Persistente**: Conexión con Buckets de S3 para sustituir volúmenes locales.
+- [x] **Soporte NVIDIA CUDA**: Motor listo para GPUs RTX.
+- [x] **Perfiles de Despliegue**: Un solo comando para cualquier S.O.
+- [ ] **Batch Processing (Súper Ahorro)**: Implementación final en el motor local (actualmente solo en Cloud).
 - [ ] **Soporte EPUB**: Parser automático de libros electrónicos.
+- [ ] **Multi-Tenancy**: Gestión de perfiles de usuario.

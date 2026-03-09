@@ -233,57 +233,76 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                         .where(models.AudioChunk.audiobook_id == audiobook_id)
                         .where(models.AudioChunk.status == "pending")
                         .order_by(models.AudioChunk.sequence_order)
-                        .limit(1)
                     )
-                    chunk = result.scalar_one_or_none()
+                    all_pending = result.scalars().all()
 
-                if chunk is None:
-                    break  # Todos procesados
+                if not all_pending:
+                    break
 
-                # Marcar como procesando
+                batch = []
+                # En la nube agrupamos si tienen la misma voz
+                if use_cloud:
+                    first = all_pending[0]
+                    batch.append(first)
+                    for c in all_pending[1:8]: # Lote de hasta 8
+                        if c.voice_id == first.voice_id:
+                            batch.append(c)
+                        else:
+                            break
+                else:
+                    batch = [all_pending[0]]
+
+                # Marcar lote como procesando
                 async with AsyncSessionLocal() as db:
+                    ids = [c.id for c in batch]
                     await db.execute(
-                        update(models.AudioChunk).where(models.AudioChunk.id == chunk.id)
+                        update(models.AudioChunk).where(models.AudioChunk.id.in_(ids))
                         .values(status="processing")
                     )
                     await db.commit()
-                    voice = await db.get(models.Voice, chunk.voice_id)
+                    voice = await db.get(models.Voice, batch[0].voice_id)
 
                 try:
-                    # Filtro anti-trivial: si el texto no tiene contenido fonético real, lo saltamos
-                    if is_trivial(chunk.source_text):
-                        print(f"⏭️ Chunk trivial ignorado: '{chunk.source_text}'")
-                        async with AsyncSessionLocal() as db:
-                            await db.execute(
-                                update(models.AudioChunk).where(models.AudioChunk.id == chunk.id)
-                                .values(status="done")
-                            )
-                            await db.execute(
-                                update(models.Audiobook).where(models.Audiobook.id == audiobook_id)
-                                .values(completed_chunks=models.Audiobook.completed_chunks + 1)
-                            )
-                            await db.commit()
+                    # Filtro anti-trivial (se puede aplicar al lote entero o individual)
+                    # Por simplicidad lo hacemos individual dentro del lote si hace falta, 
+                    # pero aquí lo filtramos antes de enviar
+                    valid_batch = []
+                    for chunk in batch:
+                        if is_trivial(chunk.source_text):
+                            print(f"⏭️ Chunk trivial ignorado: '{chunk.source_text}'")
+                            async with AsyncSessionLocal() as db:
+                                await db.execute(
+                                    update(models.AudioChunk).where(models.AudioChunk.id == chunk.id)
+                                    .values(status="done")
+                                )
+                                await db.execute(
+                                    update(models.Audiobook).where(models.Audiobook.id == audiobook_id)
+                                    .values(completed_chunks=models.Audiobook.completed_chunks + 1)
+                                )
+                                await db.commit()
+                        else:
+                            valid_batch.append(chunk)
+                    
+                    if not valid_batch:
                         continue
 
                     if use_cloud and CLOUD_TTS_URL:
-                        # 🛰️ MODO CLOUD SYNC: Sincronización inteligente de voces
+                        # 🛰️ MODO CLOUD BATCH
                         import hashlib
                         with open(voice.sample_path, "rb") as f:
                             audio_data = f.read()
-                            # ID único basado en el contenido del audio (si cambia el audio, cambia el ID)
                             voice_id = hashlib.md5(audio_data).hexdigest()
                         
                         payload = {
-                            "text": chunk.source_text,
+                            "texts": [c.source_text for c in valid_batch],
                             "language": "Spanish",
                             "voice_id": voice_id,
                             "ref_text": voice.model_ref or "",
                         }
                         
-                        # Intento 1: Sin audio (rápido, si ya está en la nube)
+                        # Intento 1: Sin audio
                         resp = await client.post(CLOUD_TTS_URL, json=payload)
                         
-                        # Intento 2: Si la nube no la tiene, la mandamos (solo una vez en la vida)
                         if resp.status_code == 404:
                             try:
                                 detail = resp.json().get("detail", "")
@@ -293,41 +312,71 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                                 print(f"🛰️ Sincronizando voz '{voice.name}' con la nube (primera vez)...")
                                 payload["ref_audio_b64"] = base64.b64encode(audio_data).decode()
                                 resp = await client.post(CLOUD_TTS_URL, json=payload)
+                        
+                        resp.raise_for_status()
+                        batch_data = resp.json()
+                        audios_b64 = batch_data.get("audios", [])
+                        
+                        for i, chunk in enumerate(valid_batch):
+                            if i >= len(audios_b64): break
+                            
+                            chunk_path = os.path.join(out_dir, f"chunk_{chunk.sequence_order:05d}.wav")
+                            with open(chunk_path, "wb") as f:
+                                f.write(base64.b64decode(audios_b64[i]))
+
+                            audio_data_vals, sr = sf.read(chunk_path)
+                            duration_ms = int(len(audio_data_vals) / sr * 1000)
+
+                            async with AsyncSessionLocal() as db:
+                                await db.execute(
+                                    update(models.AudioChunk).where(models.AudioChunk.id == chunk.id)
+                                    .values(status="done", audio_path=chunk_path, duration_ms=duration_ms)
+                                )
+                                await db.execute(
+                                    update(models.Audiobook).where(models.Audiobook.id == audiobook_id)
+                                    .values(completed_chunks=models.Audiobook.completed_chunks + 1)
+                                )
+                                await db.commit()
                     else:
-                        # Local
+                        # Local (individual por ahora)
+                        chunk = valid_batch[0]
                         resp = await client.post(f"{TTS_URL}/tts", json={
                             "text": chunk.source_text,
                             "language": "Spanish",
                             "ref_audio": backend_to_tts_path(voice.sample_path),
                             "ref_text": voice.model_ref or "",
                         })
-                    resp.raise_for_status()
+                        resp.raise_for_status()
 
-                    chunk_path = os.path.join(out_dir, f"chunk_{chunk.sequence_order:05d}.wav")
-                    with open(chunk_path, "wb") as f:
-                        f.write(resp.content)
+                        chunk_path = os.path.join(out_dir, f"chunk_{chunk.sequence_order:05d}.wav")
+                        with open(chunk_path, "wb") as f:
+                            f.write(resp.content)
 
-                    audio_data, sr = sf.read(chunk_path)
-                    duration_ms = int(len(audio_data) / sr * 1000)
+                        audio_data_vals, sr = sf.read(chunk_path)
+                        duration_ms = int(len(audio_data_vals) / sr * 1000)
 
-                    async with AsyncSessionLocal() as db:
-                        await db.execute(
-                            update(models.AudioChunk).where(models.AudioChunk.id == chunk.id)
-                            .values(status="done", audio_path=chunk_path, duration_ms=duration_ms)
-                        )
-                        await db.execute(
-                            update(models.Audiobook).where(models.Audiobook.id == audiobook_id)
-                            .values(completed_chunks=models.Audiobook.completed_chunks + 1)
-                        )
-                        await db.commit()
+                        async with AsyncSessionLocal() as db:
+                            await db.execute(
+                                update(models.AudioChunk).where(models.AudioChunk.id == chunk.id)
+                                .values(status="done", audio_path=chunk_path, duration_ms=duration_ms)
+                            )
+                            await db.execute(
+                                update(models.Audiobook).where(models.Audiobook.id == audiobook_id)
+                                .values(completed_chunks=models.Audiobook.completed_chunks + 1)
+                            )
+                            await db.commit()
 
                 except Exception as e:
+                    # Marcar TODOS los chunks del lote como error
                     async with AsyncSessionLocal() as db:
-                        await db.execute(
-                            update(models.AudioChunk).where(models.AudioChunk.id == chunk.id)
-                            .values(status="error", error_message=str(e)[:500])
-                        )
+                        for failed_chunk in batch:
+                            await db.execute(
+                                update(models.AudioChunk).where(models.AudioChunk.id == failed_chunk.id)
+                                .where(models.AudioChunk.status == "processing")
+                                .values(status="error", error_message=str(e)[:500])
+                            )
                         await db.commit()
+                    print(f"🔥 Error en lote de {len(batch)} chunks: {str(e)[:200]}")
 
         # ── Mezclar y finalizar ──
         await _merge(audiobook_id, out_dir)

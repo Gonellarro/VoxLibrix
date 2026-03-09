@@ -29,7 +29,8 @@ app = modal.App("voxlibrix-tts")
     gpu="L4",
     volumes={"/models": model_volume},
     network_file_systems={"/voices": voices_nfs},
-    scaledown_window=300,
+    scaledown_window=450, # Aumentamos el escalado por lotes
+    timeout=600,         # Aumentamos timeout para lotes largos
 )
 class TTS:
     @modal.enter()
@@ -55,70 +56,83 @@ class TTS:
         )
         print("✓ Motor VoxLibrix L4 activo")
 
-    def _generate_audio(self, text, language, ref_audio_path, ref_text):
-        """Genera audio. Lee la voz desde el disco LOCAL (no NFS) para máxima velocidad."""
+    def _generate_single(self, text, language, local_ref_path, ref_text):
+        """Genera un solo fragmento de audio."""
         import soundfile as sf
         import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        # FIX 2: Copiamos la voz al disco LOCAL antes de entregarla a la GPU
-        # El NFS es lento y puede no haber completado la escritura.
-        local_ref_path = f"/tmp/{os.path.basename(ref_audio_path)}"
-        if not os.path.exists(local_ref_path):
-            shutil.copy2(ref_audio_path, local_ref_path)
-
-        # FIX 3: Sin try/except inútil. Los errores suben solos al llamador.
-        print(f"🎙️ Generando: '{text[:50]}...' con voz {os.path.basename(ref_audio_path)}")
+        
+        # En modo lote, no vaciamos caché en cada frase para no perder rendimiento
+        # solo si la memoria está muy llena lo haríamos.
+        
         with torch.inference_mode():
             wavs, sr = self.model.generate_voice_clone(
                 text=text,
                 language=language,
-                ref_audio=local_ref_path,  # Usamos la copia local
+                ref_audio=local_ref_path,
                 ref_text=ref_text,
             )
 
         buffer = io.BytesIO()
         sf.write(buffer, wavs[0], sr, format="WAV")
-        return buffer.getvalue()
+        return buffer.getvalue(), sr
 
     @modal.fastapi_endpoint(method="POST")
     async def tts(self, req: dict):
         import base64
+        import torch
         from fastapi import HTTPException
-        from fastapi.responses import Response
+        from fastapi.responses import JSONResponse, Response
 
-        text = req.get("text")
+        # Soporte para lote o individual
+        texts = req.get("texts") # Lista de frases
+        is_batch = texts is not None
+        
+        if not is_batch:
+            texts = [req.get("text")]
+            
         ref_text = req.get("ref_text", "")
         voice_id = req.get("voice_id")
         ref_audio_b64 = req.get("ref_audio_b64")
         language = req.get("language", "Spanish")
 
-        if not text or not voice_id:
-            raise HTTPException(status_code=400, detail="Faltan parámetros (text, voice_id)")
+        if not texts[0] or not voice_id:
+            raise HTTPException(status_code=400, detail="Faltan parámetros (texts/text, voice_id)")
 
         voice_path = f"/voices/{voice_id}.wav"
+        local_ref_path = f"/tmp/{voice_id}.wav"
 
-        # 1. ¿Tenemos la voz en el NFS?
+        # 1. ¿Tenemos la voz?
         if not os.path.exists(voice_path):
             if not ref_audio_b64:
-                # FIX 4: JSON estandarizado para que el backend lo detecte fiablemente
-                print(f"❓ Voz {voice_id} no encontrada. Pidiendo sincronización al backend.")
                 raise HTTPException(status_code=404, detail="voice_not_found")
-
-            # Guardamos la voz en el NFS para siempre
-            print(f"💾 Sincronizando nueva voz: {voice_id}")
             with open(voice_path, "wb") as f:
                 f.write(base64.b64decode(ref_audio_b64))
-            print(f"✅ Voz {voice_id} guardada en el NFS.")
+        
+        # 2. Copia local SIEMPRE (para rapidez)
+        if not os.path.exists(local_ref_path):
+            shutil.copy2(voice_path, local_ref_path)
 
-        # 2. FIX 1: Generamos con manejo correcto de errores de GPU
+        # 3. Generación
+        results = []
         try:
-            output = self._generate_audio(text, language, voice_path, ref_text)
-            return Response(content=output, media_type="audio/wav")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            print(f"📦 Lote recibido: {len(texts)} fragmento(s)")
+            for idx, t in enumerate(texts):
+                if not t.strip(): continue
+                print(f"  🎙️ [{idx+1}/{len(texts)}] '{t[:60]}...'")
+                audio_bytes, _ = self._generate_single(t, language, local_ref_path, ref_text)
+                results.append(base64.b64encode(audio_bytes).decode())
+            print(f"✅ Lote completado: {len(results)} audios generados")
+            
+            if is_batch:
+                return JSONResponse(content={"audios": results})
+            else:
+                # Mantener compatibilidad con el endpoint individual si se prefiere
+                return Response(content=base64.b64decode(results[0]), media_type="audio/wav")
+                
         except Exception as e:
-            # Devolvemos un HTTP 500 legible en lugar de matar el proceso
             error_msg = str(e)
-            print(f"🔥 Error en GPU L4: {error_msg}")
-            raise HTTPException(status_code=500, detail=f"Error de generación GPU: {error_msg}")
+            print(f"🔥 Error en GPU L4 Lote: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"Error GPU: {error_msg}")

@@ -1,23 +1,57 @@
 services:
-  tts-engine:
-    build: ./tts-engine
-    container_name: tts-engine
+  # --- Motor AMD / CPU ---
+  tts-engine-amd:
+    profiles: [ "amd" ]
+    build:
+      context: ./tts-engine
+      dockerfile: Dockerfile.amd
+    container_name: tts-engine-amd
     user: "1000:1000"
     expose:
       - "8000"
     volumes:
       - ./data/models:/models
       - ./data/voices:/voice
+    networks:
+      default:
+        aliases:
+          - tts-engine
     environment:
-      - TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base
-      - REF_AUDIO=/voice/referencia.mp3
-      - REF_TEXT=Prólogo. Mar de Noruega. Año aproximado, 1200 después de Cristo. El barco de pesca había salido de su ruta habitual. Eric y su hijo Hans habían salido a faenar al norte de su poblado natal, Blake. Esos días había habido mucha corriente y poco viento, lo que los alejó bastante de la zona de pesca del bacalao.
       - HF_HOME=/models
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 4g
+
+  # --- Motor NVIDIA RTX ---
+  tts-engine-nvidia:
+    profiles: [ "nvidia" ]
+    build:
+      context: ./tts-engine
+      dockerfile: Dockerfile.nvidia
+    container_name: tts-engine-nvidia
+    user: "1000:1000"
+    expose:
+      - "8000"
+    volumes:
+      - ./data/models:/models
+      - ./data/voices:/voice
+    networks:
+      default:
+        aliases:
+          - tts-engine
+    environment:
+      - HF_HOME=/models
+    # Esto es crucial para que Docker pase la tarjeta NVIDIA al contenedor
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
@@ -56,8 +90,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      tts-engine:
-        condition: service_started
     restart: unless-stopped
     command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 

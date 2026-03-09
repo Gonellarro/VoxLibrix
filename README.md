@@ -47,17 +47,28 @@ Para probar el sistema en tu propia máquina:
 - Al menos 8GB de RAM (16GB recomendado para el modelo 1.7B)
 - Micrófono o archivo de audio WAV de referencia (5-15 segundos)
 
-### 2. Despliegue rápido
+### 2. Despliegue rápido (Elige tu arquitectura)
+
+VoxLibrix detecta automáticamente tu hardware mediante perfiles de Docker Compose. Elige el comando según tu tarjeta gráfica:
+
+**Opción A: NVIDIA (Recomendado - RTX 20/30/40/50)**
+Si tienes una tarjeta NVIDIA (como tu RTX 5060), este modo usará **CUDA 12.1** para una generación ultrarrápida (gratis).
 ```bash
-git clone https://github.com/Gonellarro/VoxLibrix.git
-cd VoxLibrix
-docker compose up --build
+docker compose --profile nvidia up --build
+```
+*Nota: Requiere Windows 11 (WSL2) o Linux con NVIDIA Container Toolkit instalado.*
+
+**Opción B: AMD / CPU (Modo de Compatibilidad)**
+Si no tienes una NVIDIA, este modo usará la **CPU** (más lento) o la potencia de la **Nube (Modal)** si la tienes configurada.
+```bash
+docker compose --profile amd up --build
 ```
 
 ### 3. Configuración inicial
-- Coloca tu audio de referencia en `data/voices/referencia.wav`.
-- Transcribe exactamente lo que dices en ese audio en el archivo `docker-compose.yml` (variable `REF_TEXT`).
 - Accede a la interfaz web en `http://localhost:3000`.
+- Crea una **Voz** subiendo un audio de 10-15s.
+- Crea un **Libro** subiendo un archivo `.txt`.
+- ¡Pulsa **Local** (NVIDIA) o **Nube** (AMD) para empezar a generar!
 
 ---
 
