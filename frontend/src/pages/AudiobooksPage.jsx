@@ -120,6 +120,7 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
     const [start, setStart] = useState(ab.start_char ?? 0)
     const [end, setEnd] = useState(ab.end_char ?? 0)
     const [saving, setSaving] = useState(false)
+    const [selectionMode, setSelectionMode] = useState(null) // 'start' or 'end'
 
     useEffect(() => {
         api.books.text(book.id)
@@ -130,6 +131,8 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
             .catch(() => addToast('Error al cargar el texto', 'error'))
             .finally(() => setLoading(false))
     }, [book.id, ab.end_char])
+
+    const countWords = (t) => t.split(/\s+/).filter(Boolean).length
 
     async function handleSave() {
         setSaving(true)
@@ -145,21 +148,61 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
         }
     }
 
+    const handleTextClick = (e) => {
+        if (!selectionMode) return
+
+        let offset = 0
+        if (document.caretRangeFromPoint) {
+            const range = document.caretRangeFromPoint(e.clientX, e.clientY)
+            const container = document.getElementById('selection-pre')
+            const preRange = document.createRange()
+            preRange.selectNodeContents(container)
+            preRange.setEnd(range.startContainer, range.startOffset)
+            offset = preRange.toString().length
+        } else {
+            const sel = window.getSelection()
+            if (!sel.rangeCount) return
+            const range = sel.getRangeAt(0)
+            const container = document.getElementById('selection-pre')
+            const preRange = document.createRange()
+            preRange.selectNodeContents(container)
+            preRange.setEnd(range.startContainer, range.startOffset)
+            offset = preRange.toString().length
+        }
+
+        if (selectionMode === 'start') {
+            setStart(Math.min(offset, end))
+            addToast(`Inicio fijado en palabra ${countWords(text.substring(0, offset))}`, 'success')
+        } else {
+            setEnd(Math.max(offset, start))
+            addToast(`Fin fijado en palabra ${countWords(text.substring(0, offset))}`, 'success')
+        }
+        setSelectionMode(null)
+    }
+
     const renderText = () => {
         if (!text) return null
-
         const before = text.substring(0, start)
         const selected = text.substring(start, end)
         const after = text.substring(end)
 
         return (
-            <pre className="selection-content">
+            <pre
+                id="selection-pre"
+                className={`selection-content ${selectionMode ? 'selecting-' + selectionMode : ''}`}
+                onClick={handleTextClick}
+                style={{ cursor: selectionMode ? 'crosshair' : 'text' }}
+            >
                 <span className="text-range-before">{before}</span>
                 <span className="text-range-selected">{selected}</span>
                 <span className="text-range-after">{after}</span>
             </pre>
         )
     }
+
+    const startWords = countWords(text.substring(0, start))
+    const endWords = countWords(text.substring(0, end))
+    const totalWords = countWords(text)
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -169,14 +212,31 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
                     <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
                 </div>
 
-                <div className="selection-controls">
-                    <div className="control-group">
-                        <label>Inicio (carácter):</label>
-                        <input type="number" value={start} onChange={e => setStart(Math.max(0, Number(e.target.value)))} />
+                <div className="selection-tools-v2">
+                    <div className={`tool-btn bracket-btn ${selectionMode === 'start' ? 'active' : ''}`} onClick={() => setSelectionMode(selectionMode === 'start' ? null : 'start')}>
+                        <div className="tool-info">
+                            <span className="tool-label">INICIO</span>
+                            <span className="tool-value">{startWords.toLocaleString()} Pal.</span>
+                        </div>
+                        <span className="bracket-icon green">]</span>
                     </div>
-                    <div className="control-group">
-                        <label>Fin (carácter):</label>
-                        <input type="number" value={end} onChange={e => setEnd(Math.min(text.length, Number(e.target.value)))} />
+
+                    {selectionMode ? (
+                        <div className="selection-instruction animate-pulse">
+                            Selecciona en el texto el {selectionMode === 'start' ? 'COMIENZO' : 'FINAL'}
+                        </div>
+                    ) : (
+                        <div className="selection-instruction inactive">
+                            Usa los corchetes para delimitar el audio
+                        </div>
+                    )}
+
+                    <div className={`tool-btn bracket-btn ${selectionMode === 'end' ? 'active' : ''}`} onClick={() => setSelectionMode(selectionMode === 'end' ? null : 'end')}>
+                        <span className="bracket-icon red">[</span>
+                        <div className="tool-info align-right">
+                            <span className="tool-label">FIN</span>
+                            <span className="tool-value">{endWords.toLocaleString()} Pal.</span>
+                        </div>
                     </div>
                 </div>
 
@@ -189,11 +249,12 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
                 )}
 
                 <div className="modal-footer">
-                    <p style={{ flex: 1, fontSize: 12, color: 'var(--muted)' }}>
-                        Seleccionando {text ? ((end - start) / text.length * 100).toFixed(1) : 0}% del libro (~{(end - start).toLocaleString()} carácteres)
+                    <p style={{ flex: 1, fontSize: 13, color: 'var(--muted)' }}>
+                        📖 Selección: <b>{(endWords - startWords).toLocaleString()}</b> / {totalWords.toLocaleString()} palabras
+                        <span style={{ marginLeft: 12 }}>({(((endWords - startWords) / (totalWords || 1)) * 100).toFixed(1)}%)</span>
                     </p>
                     <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                    <button className="btn btn-primary" onClick={handleSave} disabled={saving || selectionMode}>
                         {saving ? 'Guardando...' : 'Guardar Rango'}
                     </button>
                 </div>
@@ -202,11 +263,10 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
     )
 }
 
-function ProgressCard({ ab, book, onRefresh, addToast, onRemove }) {
+function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
     const [progress, setProgress] = useState(null)
     const [polling, setPolling] = useState(false)
     const [elapsed, setElapsed] = useState(0)
-    const [showSelection, setShowSelection] = useState(false)
 
     const fetchProgress = useCallback(async () => {
         try {
@@ -270,7 +330,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove }) {
 
     return (
         <div className="card book-card horizontal audiobook-card">
-            <div className="book-card-left">
+            <div className="book-card-left" onClick={onEdit} style={{ cursor: 'pointer' }}>
                 {coverUrl ? (
                     <img src={coverUrl} alt={book?.title} className="book-cover-img" />
                 ) : (
@@ -315,22 +375,12 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove }) {
                             <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} title="Motor QWEN (Local)">🏠 QWEN</button>
                             <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} title="Motor Piper (Rápido)">🎺 Piper</button>
                             <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️ Nube</button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setShowSelection(true)} title="Editar rango y ajustes">⚙️ Editar</button>
+                            <button className="btn btn-ghost btn-sm" onClick={onEdit} title="Editar rango y ajustes">⚙️ Editar</button>
                         </div>
                     )}
                     <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={() => onRemove(ab.id)}>🗑</button>
                 </div>
             </div>
-
-            {showSelection && (
-                <TextSelectionModal
-                    ab={ab}
-                    book={book}
-                    onClose={() => setShowSelection(false)}
-                    onUpdated={onRefresh}
-                    addToast={addToast}
-                />
-            )}
         </div>
     )
 }
@@ -340,6 +390,7 @@ export default function AudiobooksPage() {
     const [voices, setVoices] = useState([])
     const [books, setBooks] = useState([])
     const [showModal, setShowModal] = useState(false)
+    const [editingAb, setEditingAb] = useState(null)
     const [toasts, setToasts] = useState([])
 
     function addToast(msg, type = 'info') {
@@ -417,6 +468,7 @@ export default function AudiobooksPage() {
                                                 onRefresh={load}
                                                 addToast={addToast}
                                                 onRemove={remove}
+                                                onEdit={() => setEditingAb(ab)}
                                             />
                                         </div>
                                     ))}
@@ -433,6 +485,15 @@ export default function AudiobooksPage() {
                     books={books}
                     onClose={() => setShowModal(false)}
                     onSaved={() => { setShowModal(false); load() }}
+                    addToast={addToast}
+                />
+            )}
+            {editingAb && (
+                <TextSelectionModal
+                    ab={editingAb}
+                    book={books.find(b => b.id === editingAb.book_id)}
+                    onClose={() => setEditingAb(null)}
+                    onUpdated={load}
                     addToast={addToast}
                 />
             )}
