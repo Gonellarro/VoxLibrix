@@ -522,27 +522,38 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
                 </div>
 
                 <div className="ab-footer">
-                    <div className="ab-progress-container">
-                        <div className="progress-bar">
-                            <div className="progress-fill" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="pct-text">{pct}%</span>
-                    </div>
-
-                    <div className="ab-actions">
-                        {status === 'done' ? (
-                            <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
-                        ) : isRunning ? (
-                            <button className="btn btn-ghost btn-sm" onClick={handlePause} title="Pausar">⏸</button>
-                        ) : (
-                            <div style={{ display: 'flex', gap: 4 }}>
-                                <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} title="Motor QWEN (Local)">🏠</button>
-                                <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} title="Motor Piper (Rápido)">🎺</button>
-                                <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️</button>
+                    {status === 'done' ? (
+                        <>
+                            <span className={`badge badge-engine-${ab.engine}`}>
+                                {ab.engine === 'piper' ? '🎺 Piper' : ab.engine === 'cloud' ? '☁️ Cloud' : '🏠 Qwen3'}
+                            </span>
+                            <div className="ab-actions">
+                                <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
+                                <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
                             </div>
-                        )}
-                        <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
-                    </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="ab-progress-container">
+                                <div className="progress-bar">
+                                    <div className="progress-fill" style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="pct-text">{pct}%</span>
+                            </div>
+                            <div className="ab-actions">
+                                {isRunning ? (
+                                    <button className="btn btn-ghost btn-sm" onClick={handlePause} title="Pausar">⏸</button>
+                                ) : (
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                        <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} title="Motor QWEN (Local)">🏠</button>
+                                        <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} title="Motor Piper (Rápido)">🎺</button>
+                                        <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️</button>
+                                    </div>
+                                )}
+                                <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
