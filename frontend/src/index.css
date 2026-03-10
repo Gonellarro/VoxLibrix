@@ -1344,10 +1344,15 @@ audio {
 /* ── Engine Badges ────────────────────────────────────────────────────────── */
 [class^="badge-engine-"] {
     font-size: 11px;
-    padding: 4px 12px;
-    border-radius: 12px;
+    padding: 3px 12px;
+    border-radius: 20px;
     font-weight: 600;
     letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+[class^="badge-engine-"]::before {
+    display: none;
 }
 
 .badge-engine-qwen {
