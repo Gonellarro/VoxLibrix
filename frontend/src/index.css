@@ -751,15 +751,15 @@ audio {
     flex-direction: row;
     padding: 0;
     overflow: hidden;
-    height: 200px;
+    height: 230px;
     /* Altura fija para consistencia */
     gap: 0;
     position: relative;
 }
 
 .book-card-left {
-    width: 140px;
-    height: 200px;
+    width: 160px;
+    height: 230px;
     background: var(--surface2);
     display: flex;
     align-items: center;
