@@ -211,6 +211,10 @@ async def get_book_text(book_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(404, "Archivo de texto no encontrado")
     with open(b.txt_path, "r", encoding="utf-8") as f:
         text = f.read()
+
+    # Limpiar saltos de línea excesivos (Máximo 2 líneas en blanco)
+    text = re.sub(r'\n{4,}', '\n\n\n', text)
+    
     return {"text": text}
 
 

@@ -201,6 +201,9 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                 with open(book.txt_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
+                # Limpieza de saltos de línea excesivos (Sincronizado con el frontal)
+                content = re.sub(r'\n{4,}', '\n\n\n', content)
+
                 # Aplicar recorte de rango si existe
                 if ab.start_char is not None or ab.end_char is not None:
                     start = ab.start_char or 0

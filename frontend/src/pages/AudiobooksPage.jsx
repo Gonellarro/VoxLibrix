@@ -125,8 +125,17 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
     useEffect(() => {
         api.books.text(book.id)
             .then(r => {
-                setText(r.text)
-                if (ab.end_char === null || ab.end_char === 0) setEnd(r.text.length)
+                // Limpiar saltos de línea excesivos (Máximo 2 líneas en blanco = 3 saltos de línea)
+                const cleaned = r.text.replace(/\n{4,}/g, '\n\n\n')
+                setText(cleaned)
+
+                // Si ab.end_char es 0 o nulo, apuntamos al final del texto limpio
+                if (ab.end_char === null || ab.end_char === 0) {
+                    setEnd(cleaned.length)
+                } else if (cleaned.length !== r.text.length) {
+                    // Si el texto ha cambiado de longitud, los índices originales podrían estar ligeramente desplazados.
+                    // Por ahora los mantenemos, el usuario puede ajustarlos visualmente.
+                }
             })
             .catch(() => addToast('Error al cargar el texto', 'error'))
             .finally(() => setLoading(false))
