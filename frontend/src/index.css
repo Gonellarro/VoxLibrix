@@ -1346,10 +1346,17 @@ audio {
     font-size: 11px;
     padding: 0 10px;
     height: 28px;
-    line-height: 28px;
     border-radius: 12px;
     font-weight: 600;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.badge-engine-icon {
+    font-size: 13px;
+    line-height: 1;
 }
 
 .badge-engine-qwen {
