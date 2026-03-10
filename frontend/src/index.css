@@ -904,14 +904,18 @@ audio {
 .ab-footer {
     margin-top: auto;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding-top: 4px;
 }
 
 .ab-progress-container {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
 }
 
 .ab-progress-container .progress-bar {
@@ -930,8 +934,8 @@ audio {
 .ab-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
-    justify-content: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 .ab-actions .btn-sm {
