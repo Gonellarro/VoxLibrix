@@ -330,7 +330,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
 
     return (
         <div className="card book-card horizontal audiobook-card">
-            <div className="book-card-left" onClick={onEdit} style={{ cursor: 'pointer' }}>
+            <div className="book-card-left" onClick={onEdit} title="Editar rango">
                 {coverUrl ? (
                     <img src={coverUrl} alt={book?.title} className="book-cover-img" />
                 ) : (
@@ -338,47 +338,57 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
                 )}
             </div>
             <div className="book-card-right">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div className="book-details">
-                        <h3 className="book-title" title={book?.title}>{book?.title || `Audiolibro #${ab.id}`}</h3>
-                        <p className="book-author">🎙 {ab.narratorName}</p>
-                        <div className="book-meta-footer">
-                            <span>📦 {ab.output_format?.toUpperCase()}</span>
-                            <span>📊 {totalWords.toLocaleString()} pal.</span>
-                            {elapsed > 0 && <span>⏱ {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}</span>}
-                        </div>
-                    </div>
+                <div className="ab-header">
+                    <h3 className="ab-title" title={book?.title}>{book?.title || `Audiolibro #${ab.id}`}</h3>
                     <span className={`badge badge-${status === 'pending' && isRunning ? 'processing' : status}`}>
                         {isRunning ? 'Procesando' : status === 'pending' ? 'Pendiente' : status === 'done' ? 'Completado' : status === 'error' ? 'Error' : 'En curso'}
                     </span>
                 </div>
 
-                {(status !== 'pending' || (progress?.total_chunks > 0)) && (
-                    <div className="progress-wrap" style={{ marginTop: 10 }}>
-                        <div className="progress-label">
-                            <span>{progress?.completed_chunks ?? ab.completed_chunks}/{progress?.total_chunks ?? ab.total_chunks} frags</span>
-                            <span>{pct}%</span>
-                        </div>
+                <p className="ab-narrator">🎙 {ab.narratorName}</p>
+
+                <div className="ab-stats-grid">
+                    <div className="stat-item">
+                        <span className="stat-label">FORMATO</span>
+                        <span className="stat-value">{ab.output_format?.toUpperCase()}</span>
+                    </div>
+                    <div className="stat-item">
+                        <span className="stat-label">PALABRAS</span>
+                        <span className="stat-value">{totalWords.toLocaleString()}</span>
+                    </div>
+                    <div className="stat-item">
+                        <span className="stat-label">TIEMPO</span>
+                        <span className="stat-value">{elapsed > 0 ? `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}` : '--:--'}</span>
+                    </div>
+                    <div className="stat-item">
+                        <span className="stat-label">FRAGMENTOS</span>
+                        <span className="stat-value">{progress?.completed_chunks ?? ab.completed_chunks}/{progress?.total_chunks ?? ab.total_chunks}</span>
+                    </div>
+                </div>
+
+                <div className="ab-footer">
+                    <div className="ab-progress-container">
                         <div className="progress-bar">
                             <div className="progress-fill" style={{ width: `${pct}%` }} />
                         </div>
+                        <span className="pct-text">{pct}%</span>
                     </div>
-                )}
 
-                <div className="card-actions" style={{ marginTop: 'auto', position: 'static' }}>
-                    {status === 'done' ? (
-                        <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download>⬇ Descargar</a>
-                    ) : isRunning ? (
-                        <button className="btn btn-ghost btn-sm" onClick={handlePause}>⏸ Pausar</button>
-                    ) : (
-                        <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} title="Motor QWEN (Local)">🏠 QWEN</button>
-                            <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} title="Motor Piper (Rápido)">🎺 Piper</button>
-                            <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️ Nube</button>
-                            <button className="btn btn-ghost btn-sm" onClick={onEdit} title="Editar rango y ajustes">⚙️ Editar</button>
-                        </div>
-                    )}
-                    <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={() => onRemove(ab.id)}>🗑</button>
+                    <div className="ab-actions">
+                        {status === 'done' ? (
+                            <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
+                        ) : isRunning ? (
+                            <button className="btn btn-ghost btn-sm" onClick={handlePause} title="Pausar">⏸</button>
+                        ) : (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} title="Motor QWEN (Local)">🏠</button>
+                                <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} title="Motor Piper (Rápido)">🎺</button>
+                                <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️</button>
+                            </div>
+                        )}
+                        <button className="btn btn-ghost btn-sm" onClick={onEdit} title="Editar rango">⚙️</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
+                    </div>
                 </div>
             </div>
         </div>
