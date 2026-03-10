@@ -95,21 +95,14 @@ async def update_audiobook(ab_id: int, payload: schemas.AudiobookUpdate, db: Asy
     if not ab:
         raise HTTPException(404, "Audiolibro no encontrado")
     
-    if ab.status == "processing" or generator.is_running(ab_id):
-        raise HTTPException(400, "No se puede editar mientras se está procesando")
+    is_only_position = all(getattr(payload, k) is None for k in payload.model_fields_set if k != 'last_position')
 
-    if payload.narrator_voice_id is not None:
-        ab.narrator_voice_id = payload.narrator_voice_id
-    if payload.engine is not None:
-        ab.engine = payload.engine
-    if payload.engine_voice_id is not None:
-        ab.engine_voice_id = payload.engine_voice_id
-    if payload.output_format is not None:
-        ab.output_format = payload.output_format
-    if payload.start_char is not None:
-        ab.start_char = payload.start_char
-    if payload.end_char is not None:
-        ab.end_char = payload.end_char
+    if not is_only_position and (ab.status == "processing" or generator.is_running(ab_id)):
+        raise HTTPException(400, "No se puede editar la configuración mientras se está procesando")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(ab, field, value)
     
     # Recalcular palabras si cambia el rango
     if payload.start_char is not None or payload.end_char is not None:

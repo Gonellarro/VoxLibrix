@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api.js'
 
 function Toast({ toasts }) {
@@ -272,7 +272,153 @@ function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
     )
 }
 
-function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
+function AudioPlayerModal({ ab, book, onClose, addToast }) {
+    const audioRef = useRef(null)
+    const [playing, setPlaying] = useState(false)
+    const [currentTime, setCurrentTime] = useState(ab.last_position || 0)
+    const [duration, setDuration] = useState(0)
+    const [playbackRate, setPlaybackRate] = useState(1)
+    const saveTimerRef = useRef(null)
+
+    const audioUrl = api.audiobooks.downloadUrl(ab.id)
+
+    useEffect(() => {
+        // Guardar progreso cada 10 segundos
+        saveTimerRef.current = setInterval(() => {
+            if (audioRef.current && !audioRef.current.paused) {
+                savePosition(audioRef.current.currentTime)
+            }
+        }, 10000)
+        return () => {
+            clearInterval(saveTimerRef.current)
+            if (audioRef.current) savePosition(audioRef.current.currentTime)
+        }
+    }, [ab.id])
+
+    async function savePosition(pos) {
+        try {
+            await api.audiobooks.update(ab.id, { last_position: Math.floor(pos) })
+        } catch (e) {
+            console.error('Error al guardar posición', e)
+        }
+    }
+
+    const togglePlay = () => {
+        if (playing) audioRef.current.pause()
+        else audioRef.current.play()
+        setPlaying(!playing)
+    }
+
+    const handleStop = () => {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+        setPlaying(false)
+        savePosition(0)
+    }
+
+    const skip = (seconds) => {
+        audioRef.current.currentTime += seconds
+    }
+
+    const onLoadedMetadata = () => {
+        setDuration(audioRef.current.duration)
+        audioRef.current.currentTime = ab.last_position || 0
+    }
+
+    const onTimeUpdate = () => {
+        setCurrentTime(audioRef.current.currentTime)
+    }
+
+    const handleSeek = (e) => {
+        const time = parseFloat(e.target.value)
+        audioRef.current.currentTime = time
+        setCurrentTime(time)
+    }
+
+    const formatTime = (s) => {
+        const h = Math.floor(s / 3600)
+        const m = Math.floor((s % 3600) / 60)
+        const sec = Math.floor(s % 60)
+        return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal audio-player-modal" onClick={e => e.stopPropagation()}>
+                <div className="player-header">
+                    <div className="player-title-box">
+                        <span className="player-label">REPRODUCIENDO</span>
+                        <h3 className="player-title">{book.title}</h3>
+                    </div>
+                    <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+                </div>
+
+                <div className="player-body">
+                    <div className="player-artwork">
+                        {book.cover_path ? (
+                            <img src={`/api${book.cover_path}`} alt="Cover" />
+                        ) : (
+                            <div className="artwork-placeholder">🎧</div>
+                        )}
+                    </div>
+
+                    <div className="player-controls-main">
+                        <audio
+                            ref={audioRef}
+                            src={audioUrl}
+                            onPlay={() => setPlaying(true)}
+                            onPause={() => setPlaying(false)}
+                            onLoadedMetadata={onLoadedMetadata}
+                            onTimeUpdate={onTimeUpdate}
+                        />
+
+                        <div className="seek-bar-container">
+                            <span className="time-text">{formatTime(currentTime)}</span>
+                            <input
+                                type="range"
+                                className="player-seek-bar"
+                                min="0"
+                                max={duration || 0}
+                                value={currentTime}
+                                onChange={handleSeek}
+                            />
+                            <span className="time-text">{formatTime(duration)}</span>
+                        </div>
+
+                        <div className="playback-btns">
+                            <button className="btn-player-sub" onClick={() => skip(-15)} title="-15s">↺ 15</button>
+
+                            <button className="btn-player-stop" onClick={handleStop} title="Stop">⏹</button>
+
+                            <button className="btn-player-main" onClick={togglePlay}>
+                                {playing ? '⏸' : '▶'}
+                            </button>
+
+                            <button className="btn-player-sub" onClick={() => skip(15)} title="+15s">15 ↻</button>
+
+                            <div className="speed-control">
+                                <select
+                                    value={playbackRate}
+                                    onChange={(e) => {
+                                        const rate = parseFloat(e.target.value)
+                                        setPlaybackRate(rate)
+                                        audioRef.current.playbackRate = rate
+                                    }}
+                                >
+                                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
+                                        <option key={r} value={r}>{r}x</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay }) {
     const [progress, setProgress] = useState(null)
     const [polling, setPolling] = useState(false)
     const [elapsed, setElapsed] = useState(0)
@@ -339,7 +485,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
 
     return (
         <div className="card book-card horizontal audiobook-card">
-            <div className="book-card-left" onClick={onEdit} title="Editar rango">
+            <div className="book-card-left" onClick={status === 'done' ? onPlay : onEdit} title={status === 'done' ? 'Reproducir' : 'Editar rango'}>
                 {coverUrl ? (
                     <img src={coverUrl} alt={book?.title} className="book-cover-img" />
                 ) : (
@@ -385,7 +531,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
 
                     <div className="ab-actions">
                         {status === 'done' ? (
-                            <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
+                            <button className="btn btn-primary btn-sm" onClick={onPlay} title="Reproducir">▶</button>
                         ) : isRunning ? (
                             <button className="btn btn-ghost btn-sm" onClick={handlePause} title="Pausar">⏸</button>
                         ) : (
@@ -395,7 +541,6 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
                                 <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️</button>
                             </div>
                         )}
-                        <button className="btn btn-ghost btn-sm" onClick={onEdit} title="Editar rango">⚙️</button>
                         <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
                     </div>
                 </div>
@@ -410,6 +555,7 @@ export default function AudiobooksPage() {
     const [books, setBooks] = useState([])
     const [showModal, setShowModal] = useState(false)
     const [editingAb, setEditingAb] = useState(null)
+    const [playingAb, setPlayingAb] = useState(null)
     const [toasts, setToasts] = useState([])
 
     function addToast(msg, type = 'info') {
@@ -488,6 +634,7 @@ export default function AudiobooksPage() {
                                                 addToast={addToast}
                                                 onRemove={remove}
                                                 onEdit={() => setEditingAb(ab)}
+                                                onPlay={() => setPlayingAb(ab)}
                                             />
                                         </div>
                                     ))}
@@ -513,6 +660,14 @@ export default function AudiobooksPage() {
                     book={books.find(b => b.id === editingAb.book_id)}
                     onClose={() => setEditingAb(null)}
                     onUpdated={load}
+                    addToast={addToast}
+                />
+            )}
+            {playingAb && (
+                <AudioPlayerModal
+                    ab={playingAb}
+                    book={books.find(b => b.id === playingAb.book_id)}
+                    onClose={() => setPlayingAb(null)}
                     addToast={addToast}
                 />
             )}

@@ -66,6 +66,7 @@ class Audiobook(Base):
     total_words = Column(Integer, default=0)
     start_char = Column(Integer) # Offset de inicio en el texto original
     end_char = Column(Integer)   # Offset de fin en el texto original
+    last_position = Column(Integer, default=0) # Última posición escuchada en segundos
     error_message = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime)

@@ -94,6 +94,7 @@ class AudiobookUpdate(BaseModel):
     output_format: Optional[str] = None
     start_char: Optional[int] = None
     end_char: Optional[int] = None
+    last_position: Optional[int] = None
 
 
 class AudiobookResponse(BaseModel):
@@ -110,6 +111,7 @@ class AudiobookResponse(BaseModel):
     total_words: int = 0
     start_char: Optional[int] = None
     end_char: Optional[int] = None
+    last_position: int = 0
     error_message: Optional[str]
     created_at: datetime
     started_at: Optional[datetime] = None
