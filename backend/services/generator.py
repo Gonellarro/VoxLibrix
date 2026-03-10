@@ -285,7 +285,7 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
 
                     if ab.engine == "piper":
                         # 🎺 MODO PIPER (Local ligero)
-                        voice_id = ab.engine_voice_id or "es_ES-dora-medium"
+                        voice_id = ab.engine_voice_id or "es_ES-sharvard-medium"
                         await piper_engine.generate(chunk.source_text, voice_id, chunk_path)
                         
                     elif ab.engine == "cloud" and CLOUD_TTS_URL:

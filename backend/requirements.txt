@@ -11,3 +11,4 @@ num2words==0.5.14
 ebooklib==0.18
 beautifulsoup4==4.12.3
 piper-tts==1.2.0
+pathvalidate==3.3.1
