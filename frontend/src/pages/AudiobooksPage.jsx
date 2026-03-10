@@ -525,7 +525,6 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
                     {status === 'done' ? (
                         <>
                             <span className={`badge badge-engine-${ab.engine}`}>
-                                <span className="badge-engine-icon">{ab.engine === 'piper' ? '⚡' : ab.engine === 'cloud' ? '☁️' : '🧠'}</span>
                                 {ab.engine === 'piper' ? 'Piper' : ab.engine === 'cloud' ? 'Cloud' : 'Qwen3'}
                             </span>
                             <div className="ab-actions">
