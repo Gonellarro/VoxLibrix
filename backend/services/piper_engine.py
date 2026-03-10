@@ -58,6 +58,7 @@ async def generate(text: str, voice_id: str, output_path: str):
         PIPER_BINARY,
         "-m", onnx_path,
         "-f", output_path,
+        "--sentence-silence", "0.5",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
