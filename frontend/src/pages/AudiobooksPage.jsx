@@ -531,7 +531,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
 
                     <div className="ab-actions">
                         {status === 'done' ? (
-                            <button className="btn btn-primary btn-sm" onClick={onPlay} title="Reproducir">▶</button>
+                            <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
                         ) : isRunning ? (
                             <button className="btn btn-ghost btn-sm" onClick={handlePause} title="Pausar">⏸</button>
                         ) : (
