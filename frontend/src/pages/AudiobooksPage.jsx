@@ -361,7 +361,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit }) {
                         <span className="stat-value">{elapsed > 0 ? `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}` : '--:--'}</span>
                     </div>
                     <div className="stat-item">
-                        <span className="stat-label">FRAGMENTOS</span>
+                        <span className="stat-label">FRAGS</span>
                         <span className="stat-value">{progress?.completed_chunks ?? ab.completed_chunks}/{progress?.total_chunks ?? ab.total_chunks}</span>
                     </div>
                 </div>
