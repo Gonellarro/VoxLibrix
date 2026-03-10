@@ -155,12 +155,13 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
         }
     }, [ab.id, ab.status])
 
-    async function handleStart(cloud = false) {
+    async function handleStart(engine = 'qwen') {
         try {
-            await api.audiobooks.start(ab.id, cloud)
+            await api.audiobooks.start(ab.id, engine)
             setPolling(true)
             fetchProgress()
-            addToast(cloud ? 'Generación iniciada en la Nube ☁️' : 'Generación iniciada localmente 🏠', 'info')
+            const labels = { qwen: 'QWEN 🏠', piper: 'Piper 🎺', cloud: 'Nube ☁️' }
+            addToast(`Generación iniciada: ${labels[engine] || engine}`, 'info')
         } catch (e) { addToast(e.message, 'error') }
     }
 
@@ -229,12 +230,15 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
                 ) : isRunning ? (
                     <button className="btn btn-ghost btn-sm" onClick={handlePause}>⏸ Pausar</button>
                 ) : (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-primary btn-sm" onClick={() => handleStart(false)} disabled={status === 'error'}>
-                            🏠 {ab.completed_chunks > 0 ? 'Reanudar' : 'Local'}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} disabled={status === 'error'}>
+                            🏠 QWEN
                         </button>
-                        <button className="btn btn-accent btn-sm" onClick={() => handleStart(true)} disabled={status === 'error'}>
-                            ☁️ {ab.completed_chunks > 0 ? 'Nube' : 'Nube'}
+                        <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} disabled={status === 'error'}>
+                            🎺 Piper
+                        </button>
+                        <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} disabled={status === 'error'}>
+                            ☁️ Nube
                         </button>
                     </div>
                 )}

@@ -36,7 +36,14 @@ class Book(Base):
     title = Column(String(300), nullable=False)
     author_id = Column(Integer, ForeignKey("author.id", ondelete="SET NULL"))
     txt_path = Column(String(500), nullable=False)
-    type = Column(String(20), nullable=False)
+    type = Column(String(20), nullable=False) # single_voice, multi_voice
+    word_count = Column(Integer, default=0)
+    
+    # Metadata for EPUB/Books
+    publisher = Column(String(200))
+    year = Column(Integer)
+    cover_path = Column(String(500))
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     
     author = relationship("Author", back_populates="books")
@@ -47,6 +54,10 @@ class Audiobook(Base):
     id = Column(Integer, primary_key=True, index=True)
     book_id = Column(Integer, ForeignKey("book.id", ondelete="SET NULL"), nullable=True)
     narrator_voice_id = Column(Integer, ForeignKey("voice.id"), nullable=False)
+    
+    engine = Column(String(20), default="qwen") # qwen, cloud, piper
+    engine_voice_id = Column(String(100)) # Specific voice for Piper or Cloud
+    
     output_format = Column(String(10), default="mp3")
     final_audio_path = Column(String(500))
     status = Column(String(20), default="pending")

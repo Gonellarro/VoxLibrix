@@ -9,29 +9,47 @@ function Toast({ toasts }) {
     )
 }
 
+function TextModal({ book, onClose }) {
+    const [text, setText] = useState('')
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        api.books.text(book.id)
+            .then(r => setText(r.text))
+            .catch(() => setText('Error al cargar el texto.'))
+            .finally(() => setLoading(false))
+    }, [book.id])
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal text-modal" onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h2 className="modal-title" style={{ marginBottom: 0 }}>📖 {book.title}</h2>
+                    <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+                </div>
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
+                        <span className="spinner">⏳</span> Cargando texto...
+                    </div>
+                ) : (
+                    <pre className="text-content">{text}</pre>
+                )}
+            </div>
+        </div>
+    )
+}
+
 function BookModal({ onClose, onSaved, addToast }) {
-    const [title, setTitle] = useState('')
-    const [authorId, setAuthorId] = useState('')
-    const [type, setType] = useState('single_voice')
     const [file, setFile] = useState(null)
-    const [authors, setAuthors] = useState([])
     const [saving, setSaving] = useState(false)
     const fileRef = useRef()
 
-    useEffect(() => {
-        api.authors.list().then(setAuthors).catch(e => addToast(e.message, 'error'))
-    }, [])
-
     async function save() {
-        if (!title.trim()) return addToast('El título es obligatorio', 'error')
-        if (!file) return addToast('Sube un archivo .txt', 'error')
+        if (!file) return addToast('Sube un archivo .epub o .txt', 'error')
 
         setSaving(true)
         try {
             const form = new FormData()
-            form.append('title', title)
-            if (authorId) form.append('author_id', authorId)
-            form.append('type', type)
             form.append('txt_file', file)
             await api.books.create(form)
             addToast('Libro añadido a la biblioteca', 'success')
@@ -51,44 +69,22 @@ function BookModal({ onClose, onSaved, addToast }) {
                     Añadir libro
                 </h2>
                 <div className="form-group">
-                    <label className="form-label">Título *</label>
-                    <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="El nombre del libro" />
-                </div>
-                <div className="form-group">
-                    <label className="form-label">Escritor</label>
-                    <select className="form-select" value={authorId} onChange={e => setAuthorId(e.target.value)}>
-                        <option value="">-- Seleccionar escritor --</option>
-                        {authors.map(a => (
-                            <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className="form-group">
-                    <label className="form-label">Tipo de narración</label>
-                    <select className="form-select" value={type} onChange={e => setType(e.target.value)}>
-                        <option value="single_voice">Una sola voz</option>
-                        <option value="multi_voice">Múltiples voces (con tags [PERSONAJE])</option>
-                    </select>
-                </div>
-                <div className="form-group">
-                    <label className="form-label">Archivo de texto *</label>
+                    <label className="form-label">Archivo (EPUB o TXT) *</label>
                     <div className={`file-drop ${file ? 'has-file' : ''}`} onClick={() => fileRef.current.click()}>
-                        <input ref={fileRef} type="file" accept=".txt,text/plain" onChange={e => setFile(e.target.files[0])} />
+                        <input ref={fileRef} type="file" accept=".txt,.epub" onChange={e => setFile(e.target.files[0])} />
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
-                            {file ? <strong>{file.name}</strong> : 'Subir archivo .txt'}
+                            {file ? <strong>{file.name}</strong> : 'Subir archivo .epub o .txt'}
                         </div>
                     </div>
-                    {type === 'multi_voice' && (
-                        <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-                            El archivo debe usar el formato <code style={{ color: 'var(--accent)' }}>{'[PERSONAJE] Texto...'}</code> en cada línea.
-                        </p>
-                    )}
+                    <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
+                        Extraeremos automáticamente el título, autor y portada si es un EPUB.
+                    </p>
                 </div>
                 <div className="modal-footer">
                     <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
                     <button className="btn btn-primary" onClick={save} disabled={saving}>
-                        {saving ? 'Subiendo...' : 'Añadir libro'}
+                        {saving ? 'Procesando...' : 'Añadir a la biblioteca'}
                     </button>
                 </div>
             </div>
@@ -102,6 +98,7 @@ const TYPE_COLORS = { single_voice: 'var(--primary)', multi_voice: 'var(--accent
 export default function BooksPage() {
     const [books, setBooks] = useState([])
     const [showModal, setShowModal] = useState(false)
+    const [textBook, setTextBook] = useState(null)
     const [toasts, setToasts] = useState([])
 
     function addToast(msg, type = 'info') {
@@ -148,29 +145,37 @@ export default function BooksPage() {
                 </div>
             ) : (
                 <div className="card-grid">
-                    {books.map(b => (
-                        <div key={b.id} className="card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                                <div className="card-title">{b.title}</div>
-                                <span style={{
-                                    fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
-                                    background: `${TYPE_COLORS[b.type]}18`, color: TYPE_COLORS[b.type],
-                                    flexShrink: 0, marginLeft: 8,
-                                }}>
-                                    {TYPE_LABELS[b.type]}
-                                </span>
+                    {books.map(b => {
+                        const coverUrl = b.cover_path ? `/api${b.cover_path}` : null
+                        const dateStr = new Date(b.created_at).toLocaleDateString('es-ES')
+
+                        return (
+                            <div key={b.id} className="card book-card horizontal" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
+                                <div className="book-card-left">
+                                    {coverUrl ? (
+                                        <img src={coverUrl} alt={b.title} className="book-cover-img" />
+                                    ) : (
+                                        <div className="book-icon-placeholder">📚</div>
+                                    )}
+                                </div>
+                                <div className="book-card-right">
+                                    <div className="book-details">
+                                        <h3 className="book-title" title={b.title}>{b.title}</h3>
+                                        <p className="book-author">👤 {b.author?.name || 'Autor desconocido'}</p>
+                                        <div className="book-meta-footer">
+                                            <span>📅 {dateStr}</span>
+                                            <span>📊 {b.word_count?.toLocaleString()} palabras</span>
+                                        </div>
+                                    </div>
+                                    <div className="book-card-actions">
+                                        <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); remove(b) }} title="Eliminar libro">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="card-meta">
-                                {b.author?.name ? <span>✍ {b.author.name}</span> : <span style={{ opacity: 0.5 }}>Autor desconocido</span>}
-                                <span style={{ display: 'block', marginTop: 4, fontSize: 11, opacity: 0.6 }}>
-                                    Añadido el {new Date(b.created_at).toLocaleDateString('es-ES')}
-                                </span>
-                            </div>
-                            <div className="card-actions" style={{ marginTop: 12 }}>
-                                <button className="btn btn-danger btn-sm" onClick={() => remove(b)}>Eliminar</button>
-                            </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
 
@@ -180,6 +185,9 @@ export default function BooksPage() {
                     onSaved={() => { setShowModal(false); load() }}
                     addToast={addToast}
                 />
+            )}
+            {textBook && (
+                <TextModal book={textBook} onClose={() => setTextBook(null)} />
             )}
             <Toast toasts={toasts} />
         </>

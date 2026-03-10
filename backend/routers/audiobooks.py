@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,8 +39,11 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
     ab = models.Audiobook(
         book_id=payload.book_id,
         narrator_voice_id=payload.narrator_voice_id,
+        engine=payload.engine,
+        engine_voice_id=payload.engine_voice_id,
         output_format=payload.output_format,
         status="pending",
+        total_words=book.word_count or 0
     )
     db.add(ab)
     await db.commit()
@@ -92,10 +96,22 @@ async def get_mappings(ab_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{ab_id}/start")
-async def start_generation(ab_id: int, use_cloud: bool = False, db: AsyncSession = Depends(get_db)):
+async def start_generation(
+    ab_id: int, 
+    use_cloud: bool = False,
+    engine: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
     ab = await db.get(models.Audiobook, ab_id)
     if not ab:
         raise HTTPException(404, "Audiolibro no encontrado")
+    
+    # Si se especifica motor por parámetro, priorizarlo
+    if engine:
+        ab.engine = engine
+    elif use_cloud:
+        ab.engine = "cloud"
+        
     if ab.status == "done":
         raise HTTPException(400, "El audiolibro ya está generado")
     if generator.is_running(ab_id):

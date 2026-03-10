@@ -51,6 +51,7 @@ export const api = {
         create: (form) => req('POST', '/books', form, true),
         delete: (id) => req('DELETE', `/books/${id}`),
         tags: (id) => req('GET', `/books/${id}/tags`),
+        text: (id) => req('GET', `/books/${id}/text`),
     },
 
     authors: {
@@ -65,7 +66,7 @@ export const api = {
         get: (id) => req('GET', `/audiobooks/${id}`),
         create: (body) => req('POST', '/audiobooks', body),
         delete: (id) => req('DELETE', `/audiobooks/${id}`),
-        start: (id, cloud = false) => req('POST', `/audiobooks/${id}/start?use_cloud=${cloud}`),
+        start: (id, engine = 'qwen') => req('POST', `/audiobooks/${id}/start?engine=${engine}`),
         pause: (id) => req('POST', `/audiobooks/${id}/pause`),
         progress: (id) => req('GET', `/audiobooks/${id}/progress`),
         mappings: (id) => req('GET', `/audiobooks/${id}/mappings`),

@@ -10,6 +10,7 @@ from sqlalchemy import select, update, delete
 
 import models
 from database import AsyncSessionLocal
+from . import piper_engine
 
 TTS_URL = os.environ.get("TTS_ENGINE_URL", "http://tts-engine:8000")
 CLOUD_TTS_URL = os.environ.get("CLOUD_TTS_URL")
@@ -146,7 +147,14 @@ async def start(audiobook_id: int, use_cloud: bool = False):
     """Inicia o reanuda la generación de un audiolibro."""
     if is_running(audiobook_id):
         return
-    task = asyncio.create_task(_generate(audiobook_id, use_cloud))
+    
+    # Aseguramos que el engine esté bien configurado si se pasó use_cloud
+    if use_cloud:
+        async with AsyncSessionLocal() as db:
+            await db.execute(update(models.Audiobook).where(models.Audiobook.id == audiobook_id).values(engine="cloud"))
+            await db.commit()
+
+    task = asyncio.create_task(_generate(audiobook_id))
     _tasks[audiobook_id] = task
 
 
@@ -265,7 +273,12 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                             await db.commit()
                         continue
 
-                    if use_cloud and CLOUD_TTS_URL:
+                    if ab.engine == "piper":
+                        # 🎺 MODO PIPER (Local ligero)
+                        voice_id = ab.engine_voice_id or "es_ES-dora-medium"
+                        await piper_engine.generate(chunk.source_text, voice_id, chunk_path)
+                        
+                    elif ab.engine == "cloud" and CLOUD_TTS_URL:
                         # 🛰️ MODO CLOUD SYNC
                         import hashlib
                         with open(voice.sample_path, "rb") as f:
@@ -279,22 +292,20 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                             "ref_text": voice.model_ref or "",
                         }
                         
-                        # Intento 1: Sin audio
                         resp = await client.post(CLOUD_TTS_URL, json=payload)
-                        
                         if resp.status_code == 404:
-                            try:
-                                detail = resp.json().get("detail", "")
-                            except Exception:
-                                detail = resp.text
+                            detail = ""
+                            try: detail = resp.json().get("detail", "")
+                            except: detail = resp.text
                             if "voice_not_found" in detail:
-                                print(f"🛰️ Sincronizando voz '{voice.name}' con la nube (primera vez)...")
                                 payload["ref_audio_b64"] = base64.b64encode(audio_data).decode()
                                 resp = await client.post(CLOUD_TTS_URL, json=payload)
                         
                         resp.raise_for_status()
+                        with open(chunk_path, "wb") as f:
+                            f.write(resp.content)
                     else:
-                        # Local
+                        # 🏠 MODO QWEN (Local pesado / Default)
                         resp = await client.post(f"{TTS_URL}/tts", json={
                             "text": chunk.source_text,
                             "language": "Spanish",
@@ -302,10 +313,8 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                             "ref_text": voice.model_ref or "",
                         })
                         resp.raise_for_status()
-
-                    chunk_path = os.path.join(out_dir, f"chunk_{chunk.sequence_order:05d}.wav")
-                    with open(chunk_path, "wb") as f:
-                        f.write(resp.content)
+                        with open(chunk_path, "wb") as f:
+                            f.write(resp.content)
 
                     audio_data_vals, sr = sf.read(chunk_path)
                     duration_ms = int(len(audio_data_vals) / sr * 1000)

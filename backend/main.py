@@ -3,9 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import update
 
+import os
+from fastapi.staticfiles import StaticFiles
 from database import AsyncSessionLocal
 import models
 from routers import voices, books, audiobooks, authors, admin
+
+DATA_DIR = os.environ.get("DATA_DIR", "/data")
 
 
 @asynccontextmanager
@@ -41,6 +45,11 @@ app.include_router(authors.router, prefix="/authors", tags=["Escritores"])
 app.include_router(voices.router, prefix="/voices", tags=["Voces"])
 app.include_router(books.router, prefix="/books", tags=["Libros"])
 app.include_router(audiobooks.router, prefix="/audiobooks", tags=["Audiolibros"])
+
+# Portadas de libros
+covers_path = os.path.join(DATA_DIR, "covers")
+os.makedirs(covers_path, exist_ok=True)
+app.mount("/covers", StaticFiles(directory=covers_path), name="covers")
 
 
 @app.get("/health")

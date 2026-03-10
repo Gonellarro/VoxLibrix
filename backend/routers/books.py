@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -26,14 +27,15 @@ async def list_books(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=schemas.BookResponse)
 async def create_book(
-    title: str = Form(...),
-    author_id: int = Form(None),
-    type: str = Form(...),
     txt_file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    author_id: Optional[int] = Form(None),
+    type: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
-    if type not in ("single_voice", "multi_voice"):
-        raise HTTPException(400, "type debe ser single_voice o multi_voice")
+    # Valores por defecto si no vienen en el Form
+    if not type:
+        type = "single_voice"
 
     books_dir = os.path.join(DATA_DIR, "books")
     os.makedirs(books_dir, exist_ok=True)
@@ -41,14 +43,118 @@ async def create_book(
     filename = f"{uuid.uuid4()}.txt"
     path = os.path.join(books_dir, filename)
     content = await txt_file.read()
-    with open(path, "wb") as f:
-        f.write(content)
+    
+    word_count = 0
+    metadata = {}
+    cover_path = None
+
+    if txt_file.filename.lower().endswith('.epub'):
+        # --- PROCESAMIENTO EPUB ---
+        import ebooklib
+        from ebooklib import epub
+        from bs4 import BeautifulSoup
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".epub") as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            book_epub = epub.read_epub(tmp_path)
+            
+            # 1. Extraer Texto y contar palabras
+            full_text = []
+            for item in book_epub.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+                soup = BeautifulSoup(item.get_content(), 'html.parser')
+                full_text.append(soup.get_text())
+            
+            clean_text = "\n\n".join(full_text)
+            word_count = len(clean_text.split())
+            
+            # Guardamos el texto extraído como el archivo de referencia .txt
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(clean_text)
+
+            # 2. Metadatos
+            metadata['title'] = book_epub.get_metadata('DC', 'title')[0][0] if book_epub.get_metadata('DC', 'title') else None
+            metadata['author'] = book_epub.get_metadata('DC', 'creator')[0][0] if book_epub.get_metadata('DC', 'creator') else ""
+            metadata['publisher'] = book_epub.get_metadata('DC', 'publisher')[0][0] if book_epub.get_metadata('DC', 'publisher') else ""
+            
+            # 2b. Crear/buscar Author si tenemos nombre
+            if metadata['author']:
+                author_name = metadata['author'].strip()
+                existing = await db.execute(
+                    select(models.Author).where(models.Author.name == author_name)
+                )
+                author_obj = existing.scalars().first()
+                if not author_obj:
+                    author_obj = models.Author(name=author_name)
+                    db.add(author_obj)
+                    await db.flush()  # Para obtener el ID
+                author_id = author_obj.id
+            
+            # 3. Portada — múltiples estrategias
+            covers_dir = os.path.join(DATA_DIR, "covers")
+            os.makedirs(covers_dir, exist_ok=True)
+            
+            cover_item = None
+            
+            # Estrategia A: buscar por metadata cover-image del EPUB
+            cover_meta = book_epub.get_metadata('OPF', 'cover')
+            if cover_meta:
+                cover_id = cover_meta[0][1].get('content', '') if len(cover_meta[0]) > 1 else ''
+                if cover_id:
+                    for item in book_epub.get_items():
+                        if item.get_id() == cover_id:
+                            cover_item = item
+                            break
+            
+            # Estrategia B: buscar por nombre que contenga 'cover'
+            if not cover_item:
+                for item in book_epub.get_items_of_type(ebooklib.ITEM_IMAGE):
+                    if 'cover' in item.get_name().lower():
+                        cover_item = item
+                        break
+            
+            # Estrategia C: buscar por propiedad cover-image en spine/manifest
+            if not cover_item:
+                for item in book_epub.get_items_of_type(ebooklib.ITEM_COVER):
+                    cover_item = item
+                    break
+            
+            # Estrategia D: primera imagen del EPUB (mayor de 10KB, probablemente la portada)
+            if not cover_item:
+                for item in book_epub.get_items_of_type(ebooklib.ITEM_IMAGE):
+                    if len(item.get_content()) > 10000:  # >10KB
+                        cover_item = item
+                        break
+            
+            if cover_item:
+                ext = os.path.splitext(cover_item.get_name())[1] or ".jpg"
+                cover_filename = f"{uuid.uuid4()}{ext}"
+                cover_path_abs = os.path.join(covers_dir, cover_filename)
+                with open(cover_path_abs, "wb") as f:
+                    f.write(cover_item.get_content())
+                cover_path = f"/covers/{cover_filename}"
+        finally:
+            os.remove(tmp_path)
+    else:
+        # --- PROCESAMIENTO TXT ---
+        with open(path, "wb") as f:
+            f.write(content)
+        word_count = len(content.decode("utf-8", errors="ignore").split())
+
+    # Fallback del título: metadatos EPUB > form > nombre del archivo
+    final_title = metadata.get('title') or title or os.path.splitext(txt_file.filename)[0]
 
     book = models.Book(
-        title=title,
+        title=final_title,
         author_id=author_id,
         txt_path=path,
         type=type,
+        word_count=word_count,
+        publisher=metadata.get('publisher'),
+        cover_path=cover_path
     )
     db.add(book)
     await db.commit()
@@ -93,6 +199,19 @@ async def get_tags(book_id: int, db: AsyncSession = Depends(get_db)):
         return {"tags": tags}
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@router.get("/{book_id}/text")
+async def get_book_text(book_id: int, db: AsyncSession = Depends(get_db)):
+    """Devuelve el contenido de texto extraído del libro."""
+    b = await db.get(models.Book, book_id)
+    if not b:
+        raise HTTPException(404, "Libro no encontrado")
+    if not b.txt_path or not os.path.exists(b.txt_path):
+        raise HTTPException(404, "Archivo de texto no encontrado")
+    with open(b.txt_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    return {"text": text}
 
 
 @router.delete("/{book_id}")

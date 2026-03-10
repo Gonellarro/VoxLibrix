@@ -49,6 +49,10 @@ class BookResponse(BaseModel):
     author_id: Optional[int]
     author: Optional[AuthorResponse]
     type: str
+    word_count: int = 0
+    publisher: Optional[str] = None
+    year: Optional[int] = None
+    cover_path: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -75,6 +79,8 @@ class VoiceMappingResponse(BaseModel):
 class AudiobookCreate(BaseModel):
     book_id: int
     narrator_voice_id: int
+    engine: str = "qwen"
+    engine_voice_id: Optional[str] = None
     output_format: str = "mp3"
     voice_mappings: Optional[List[VoiceMappingItem]] = None
 
@@ -83,6 +89,8 @@ class AudiobookResponse(BaseModel):
     id: int
     book_id: Optional[int]
     narrator_voice_id: Optional[int]
+    engine: str
+    engine_voice_id: Optional[str]
     output_format: str
     final_audio_path: Optional[str]
     status: str
