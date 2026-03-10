@@ -201,6 +201,12 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                 with open(book.txt_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
+                # Aplicar recorte de rango si existe
+                if ab.start_char is not None or ab.end_char is not None:
+                    start = ab.start_char or 0
+                    end = ab.end_char or len(content)
+                    content = content[start:end]
+
                 parsed = parse_chunks(content, book.type)
                 total_w = 0
                 for ch in parsed:
@@ -257,6 +263,7 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                     await db.commit()
                     voice = await db.get(models.Voice, chunk.voice_id)
 
+                chunk_path = os.path.join(out_dir, f"chunk_{chunk.sequence_order}.wav")
                 try:
                     # Filtro anti-trivial
                     if is_trivial(chunk.source_text):

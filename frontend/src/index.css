@@ -844,3 +844,70 @@ audio {
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
 }
+
+/* ── Selection Modal ────────────────────────────────────────────────────── */
+.selection-modal {
+    max-width: 900px;
+}
+
+.selection-controls {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-sm);
+}
+
+.selection-controls .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.selection-controls input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: 120px;
+}
+
+.text-container-scroll {
+    max-height: 55vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: #0a0a0c;
+}
+
+.selection-content {
+    margin: 0;
+    padding: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.text-range-before {
+    background: #22c55e;
+    color: #14532d;
+    opacity: 0.9;
+    font-size: 13px;
+}
+
+.text-range-after {
+    background: #fca5a5;
+    color: #7f1d1d;
+    opacity: 0.9;
+    font-size: 13px;
+}
+
+.text-range-selected {
+    background: transparent;
+    color: var(--text);
+    font-weight: 500;
+    font-size: 15px;
+    /* resaltar lo que se va a leer */
+}

@@ -43,7 +43,9 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
         engine_voice_id=payload.engine_voice_id,
         output_format=payload.output_format,
         status="pending",
-        total_words=book.word_count or 0
+        total_words=book.word_count or 0,
+        start_char=payload.start_char,
+        end_char=payload.end_char
     )
     db.add(ab)
     await db.commit()
@@ -85,6 +87,48 @@ async def get_audiobook(ab_id: int, db: AsyncSession = Depends(get_db)):
     if not ab:
         raise HTTPException(404, "Audiolibro no encontrado")
     return ab
+
+
+@router.patch("/{ab_id}", response_model=schemas.AudiobookResponse)
+async def update_audiobook(ab_id: int, payload: schemas.AudiobookUpdate, db: AsyncSession = Depends(get_db)):
+    ab = await db.get(models.Audiobook, ab_id)
+    if not ab:
+        raise HTTPException(404, "Audiolibro no encontrado")
+    
+    if ab.status == "processing" or generator.is_running(ab_id):
+        raise HTTPException(400, "No se puede editar mientras se está procesando")
+
+    if payload.narrator_voice_id is not None:
+        ab.narrator_voice_id = payload.narrator_voice_id
+    if payload.engine is not None:
+        ab.engine = payload.engine
+    if payload.engine_voice_id is not None:
+        ab.engine_voice_id = payload.engine_voice_id
+    if payload.output_format is not None:
+        ab.output_format = payload.output_format
+    if payload.start_char is not None:
+        ab.start_char = payload.start_char
+    if payload.end_char is not None:
+        ab.end_char = payload.end_char
+    
+    # Recalcular palabras si cambia el rango
+    if payload.start_char is not None or payload.end_char is not None:
+        # Aquí simplificamos, el front enviará los offsets. 
+        # Podríamos re-contar palabras si ab.book.txt_path existe
+        pass
+
+    await db.commit()
+    
+    # Recargar relaciones
+    result = await db.execute(
+        select(models.Audiobook)
+        .options(
+            selectinload(models.Audiobook.book).selectinload(models.Book.author),
+            selectinload(models.Audiobook.narrator_voice)
+        )
+        .where(models.Audiobook.id == ab_id)
+    )
+    return result.scalar_one()
 
 
 @router.get("/{ab_id}/mappings", response_model=list[schemas.VoiceMappingResponse])

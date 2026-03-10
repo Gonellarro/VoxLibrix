@@ -114,10 +114,99 @@ function CreateModal({ voices, books, onClose, onSaved, addToast }) {
     )
 }
 
-function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
+function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
+    const [text, setText] = useState('')
+    const [loading, setLoading] = useState(true)
+    const [start, setStart] = useState(ab.start_char ?? 0)
+    const [end, setEnd] = useState(ab.end_char ?? 0)
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        api.books.text(book.id)
+            .then(r => {
+                setText(r.text)
+                if (ab.end_char === null || ab.end_char === 0) setEnd(r.text.length)
+            })
+            .catch(() => addToast('Error al cargar el texto', 'error'))
+            .finally(() => setLoading(false))
+    }, [book.id, ab.end_char])
+
+    async function handleSave() {
+        setSaving(true)
+        try {
+            await api.audiobooks.update(ab.id, { start_char: start, end_char: end })
+            addToast('Rango actualizado', 'success')
+            onUpdated()
+            onClose()
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const renderText = () => {
+        if (!text) return null
+
+        const before = text.substring(0, start)
+        const selected = text.substring(start, end)
+        const after = text.substring(end)
+
+        return (
+            <pre className="selection-content">
+                <span className="text-range-before">{before}</span>
+                <span className="text-range-selected">{selected}</span>
+                <span className="text-range-after">{after}</span>
+            </pre>
+        )
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal text-modal selection-modal" onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h2 className="modal-title" style={{ marginBottom: 0 }}>✂️ Seleccionar Rango: {book.title}</h2>
+                    <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+                </div>
+
+                <div className="selection-controls">
+                    <div className="control-group">
+                        <label>Inicio (carácter):</label>
+                        <input type="number" value={start} onChange={e => setStart(Math.max(0, Number(e.target.value)))} />
+                    </div>
+                    <div className="control-group">
+                        <label>Fin (carácter):</label>
+                        <input type="number" value={end} onChange={e => setEnd(Math.min(text.length, Number(e.target.value)))} />
+                    </div>
+                </div>
+
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Cargando texto...</div>
+                ) : (
+                    <div className="text-container-scroll">
+                        {renderText()}
+                    </div>
+                )}
+
+                <div className="modal-footer">
+                    <p style={{ flex: 1, fontSize: 12, color: 'var(--muted)' }}>
+                        Seleccionando {text ? ((end - start) / text.length * 100).toFixed(1) : 0}% del libro (~{(end - start).toLocaleString()} carácteres)
+                    </p>
+                    <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                        {saving ? 'Guardando...' : 'Guardar Rango'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function ProgressCard({ ab, book, onRefresh, addToast, onRemove }) {
     const [progress, setProgress] = useState(null)
     const [polling, setPolling] = useState(false)
     const [elapsed, setElapsed] = useState(0)
+    const [showSelection, setShowSelection] = useState(false)
 
     const fetchProgress = useCallback(async () => {
         try {
@@ -135,9 +224,9 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
     useEffect(() => {
         let timer
         if (polling || ab.status === 'processing') {
-            const start = ab.started_at ? new Date(ab.started_at).getTime() : Date.now()
+            const startVal = ab.started_at ? new Date(ab.started_at).getTime() : Date.now()
             timer = setInterval(() => {
-                setElapsed(Math.round((Date.now() - start) / 1000))
+                setElapsed(Math.round((Date.now() - startVal) / 1000))
             }, 1000)
         } else if (ab.status === 'done' && ab.finished_at && ab.started_at) {
             const diff = (new Date(ab.finished_at).getTime() - new Date(ab.started_at).getTime()) / 1000
@@ -176,74 +265,72 @@ function ProgressCard({ ab, onRefresh, addToast, onRemove }) {
     const status = progress?.status ?? ab.status
     const isRunning = progress?.is_running ?? false
 
-    // Calcular métricas
     const totalWords = ab.total_words || 0
-    const wordsPerSec = elapsed > 0 ? (totalWords / elapsed).toFixed(2) : 0
-    const secPerWord = totalWords > 0 ? (elapsed / totalWords).toFixed(2) : 0
+    const coverUrl = book?.cover_path ? `/api${book.cover_path}` : null
 
     return (
-        <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                <div className="card-title" style={{ fontSize: 14 }}>ID #{ab.id}</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {elapsed > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>
-                            ⏱ {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}
-                        </span>
-                    )}
+        <div className="card book-card horizontal audiobook-card">
+            <div className="book-card-left">
+                {coverUrl ? (
+                    <img src={coverUrl} alt={book?.title} className="book-cover-img" />
+                ) : (
+                    <div className="book-icon-placeholder">🎧</div>
+                )}
+            </div>
+            <div className="book-card-right">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div className="book-details">
+                        <h3 className="book-title" title={book?.title}>{book?.title || `Audiolibro #${ab.id}`}</h3>
+                        <p className="book-author">🎙 {ab.narratorName}</p>
+                        <div className="book-meta-footer">
+                            <span>📦 {ab.output_format?.toUpperCase()}</span>
+                            <span>📊 {totalWords.toLocaleString()} pal.</span>
+                            {elapsed > 0 && <span>⏱ {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}</span>}
+                        </div>
+                    </div>
                     <span className={`badge badge-${status === 'pending' && isRunning ? 'processing' : status}`}>
                         {isRunning ? 'Procesando' : status === 'pending' ? 'Pendiente' : status === 'done' ? 'Completado' : status === 'error' ? 'Error' : 'En curso'}
                     </span>
                 </div>
-            </div>
-            <div className="card-meta">
-                Formato: {ab.output_format?.toUpperCase()} · {totalWords} palabras
-            </div>
 
-            {(status !== 'pending' || progress?.total_chunks > 0) && (
-                <div className="progress-wrap">
-                    <div className="progress-label">
-                        <span>{progress?.completed_chunks ?? ab.completed_chunks}/{progress?.total_chunks ?? ab.total_chunks} fragmentos</span>
-                        <span>{pct}%</span>
-                    </div>
-                    <div className="progress-bar">
-                        <div className="progress-fill" style={{ width: `${pct}%` }} />
-                    </div>
-                    {status === 'done' && elapsed > 0 && (
-                        <div style={{ fontSize: 11, marginTop: 4, color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Velocidad: {wordsPerSec} pal/s</span>
-                            <span>({secPerWord} s/pal)</span>
+                {(status !== 'pending' || (progress?.total_chunks > 0)) && (
+                    <div className="progress-wrap" style={{ marginTop: 10 }}>
+                        <div className="progress-label">
+                            <span>{progress?.completed_chunks ?? ab.completed_chunks}/{progress?.total_chunks ?? ab.total_chunks} frags</span>
+                            <span>{pct}%</span>
                         </div>
-                    )}
-                </div>
-            )}
-
-            {progress?.error_message && (
-                <p style={{ fontSize: 12, color: 'var(--error)', marginTop: 8 }}>{progress.error_message}</p>
-            )}
-
-            <div className="card-actions">
-                {status === 'done' ? (
-                    <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download>
-                        ⬇ Descargar
-                    </a>
-                ) : isRunning ? (
-                    <button className="btn btn-ghost btn-sm" onClick={handlePause}>⏸ Pausar</button>
-                ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                        <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} disabled={status === 'error'}>
-                            🏠 QWEN
-                        </button>
-                        <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} disabled={status === 'error'}>
-                            🎺 Piper
-                        </button>
-                        <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} disabled={status === 'error'}>
-                            ☁️ Nube
-                        </button>
+                        <div className="progress-bar">
+                            <div className="progress-fill" style={{ width: `${pct}%` }} />
+                        </div>
                     </div>
                 )}
-                <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)}>Eliminar</button>
+
+                <div className="card-actions" style={{ marginTop: 'auto', position: 'static' }}>
+                    {status === 'done' ? (
+                        <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download>⬇ Descargar</a>
+                    ) : isRunning ? (
+                        <button className="btn btn-ghost btn-sm" onClick={handlePause}>⏸ Pausar</button>
+                    ) : (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} title="Motor QWEN (Local)">🏠 QWEN</button>
+                            <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} title="Motor Piper (Rápido)">🎺 Piper</button>
+                            <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️ Nube</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowSelection(true)} title="Editar rango y ajustes">⚙️ Editar</button>
+                        </div>
+                    )}
+                    <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={() => onRemove(ab.id)}>🗑</button>
+                </div>
             </div>
+
+            {showSelection && (
+                <TextSelectionModal
+                    ab={ab}
+                    book={book}
+                    onClose={() => setShowSelection(false)}
+                    onUpdated={onRefresh}
+                    addToast={addToast}
+                />
+            )}
         </div>
     )
 }
@@ -324,9 +411,13 @@ export default function AudiobooksPage() {
                                 <div className="card-grid" style={{ marginBottom: 8 }}>
                                     {group.map(ab => (
                                         <div key={ab.id} style={{ position: 'relative' }}>
-                                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{ab.bookTitle}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>🎙 {ab.narratorName}</div>
-                                            <ProgressCard ab={ab} onRefresh={load} addToast={addToast} onRemove={remove} />
+                                            <ProgressCard
+                                                ab={ab}
+                                                book={books.find(b => b.id === ab.book_id)}
+                                                onRefresh={load}
+                                                addToast={addToast}
+                                                onRemove={remove}
+                                            />
                                         </div>
                                     ))}
                                 </div>

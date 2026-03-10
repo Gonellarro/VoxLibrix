@@ -83,6 +83,17 @@ class AudiobookCreate(BaseModel):
     engine_voice_id: Optional[str] = None
     output_format: str = "mp3"
     voice_mappings: Optional[List[VoiceMappingItem]] = None
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None
+
+
+class AudiobookUpdate(BaseModel):
+    narrator_voice_id: Optional[int] = None
+    engine: Optional[str] = None
+    engine_voice_id: Optional[str] = None
+    output_format: Optional[str] = None
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None
 
 
 class AudiobookResponse(BaseModel):
@@ -97,6 +108,8 @@ class AudiobookResponse(BaseModel):
     total_chunks: int
     completed_chunks: int
     total_words: int = 0
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None
     error_message: Optional[str]
     created_at: datetime
     started_at: Optional[datetime] = None
