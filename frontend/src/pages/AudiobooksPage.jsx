@@ -525,6 +525,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
                     {status === 'done' ? (
                         <>
                             <span className={`badge badge-engine-${ab.engine}`}>{ab.engine === 'piper' ? 'Piper' : ab.engine === 'cloud' ? 'Cloud' : 'Qwen3'}</span>
+                            <div style={{ flex: 1 }} />
                             <div className="ab-actions">
                                 <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
                                 <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
