@@ -179,10 +179,75 @@ function TestVoiceModal({ voice, onClose, addToast }) {
     )
 }
 
+function TestPiperModal({ voice, onClose, addToast }) {
+    const [text, setText] = useState('Érase una vez, en un reino muy lejano, vivía un joven caballero que soñaba con descubrir el mundo más allá de las montañas.')
+    const [loading, setLoading] = useState(false)
+    const [audioUrl, setAudioUrl] = useState(null)
+
+    async function generateTest() {
+        if (!text.trim()) return addToast('Escribe un texto para probar', 'error')
+        setLoading(true)
+        setAudioUrl(null)
+        try {
+            const blob = await api.voices.piperTest(voice.id, text)
+            const url = URL.createObjectURL(blob)
+            setAudioUrl(url)
+            addToast('Prueba Piper generada', 'success')
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+                <h2 className="modal-title" style={{ color: '#8b5cf6' }}>
+                    🎺 Probar voz Piper: {voice.name}
+                </h2>
+
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
+                    ID: <code style={{ fontSize: 11, color: '#8b5cf6', background: 'rgba(139,92,246,0.1)', padding: '2px 6px', borderRadius: 4 }}>{voice.id}</code>
+                </div>
+
+                <div className="form-group">
+                    <label className="form-label">Texto de prueba</label>
+                    <textarea
+                        className="form-input"
+                        rows="4"
+                        style={{ minHeight: 100, padding: '10px' }}
+                        value={text}
+                        onChange={e => setText(e.target.value)}
+                        placeholder="Escribe lo que quieras que la voz diga..."
+                    />
+                </div>
+
+                {audioUrl && (
+                    <div style={{ marginTop: 16 }}>
+                        <label className="form-label">Resultado de audio</label>
+                        <audio src={audioUrl} controls autoPlay style={{ width: '100%' }} />
+                    </div>
+                )}
+
+                <div className="modal-footer">
+                    <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+                    <button className="btn btn-primary" style={{ background: '#8b5cf6' }} onClick={generateTest} disabled={loading}>
+                        {loading ? '🎺 Generando...' : '🎺 Generar prueba'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export default function VoicesPage() {
     const [voices, setVoices] = useState([])
+    const [piperVoices, setPiperVoices] = useState([])
     const [editVoice, setEditVoice] = useState(undefined)
     const [testVoice, setTestVoice] = useState(undefined)
+    const [testPiperVoice, setTestPiperVoice] = useState(undefined)
+    const [downloading, setDownloading] = useState({})
     const [toasts, setToasts] = useState([])
 
     function addToast(msg, type = 'info') {
@@ -193,7 +258,12 @@ export default function VoicesPage() {
 
     async function load() {
         try {
-            setVoices(await api.voices.list())
+            const [v, pv] = await Promise.all([
+                api.voices.list(),
+                api.voices.piperVoices()
+            ])
+            setVoices(v)
+            setPiperVoices(pv)
         } catch (e) {
             addToast(e.message, 'error')
         }
@@ -212,12 +282,27 @@ export default function VoicesPage() {
         }
     }
 
+    const qualityLabels = { x_low: 'Básica', low: 'Baja', medium: 'Media', high: 'Alta' }
+
+    async function downloadPiperVoice(pv) {
+        setDownloading(d => ({ ...d, [pv.id]: true }))
+        try {
+            await api.voices.piperDownload(pv.id)
+            addToast(`Voz ${pv.name} descargada ✓`, 'success')
+            load()
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setDownloading(d => ({ ...d, [pv.id]: false }))
+        }
+    }
+
     return (
         <>
             <div className="page-header">
                 <div>
-                    <h1 className="page-title">Voces clonadas</h1>
-                    <p className="page-subtitle">{voices.length} voz{voices.length !== 1 ? 'es' : ''} registrada{voices.length !== 1 ? 's' : ''}</p>
+                    <h1 className="page-title">Voces</h1>
+                    <p className="page-subtitle">{voices.length} clonada{voices.length !== 1 ? 's' : ''} · {piperVoices.length} Piper</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => setEditVoice(null)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -225,18 +310,23 @@ export default function VoicesPage() {
                 </button>
             </div>
 
+            {/* ── Sección Voces Clonadas ─────────────────────────── */}
+            <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#10b981' }}>●</span> Voces clonadas ({voices.length})
+            </div>
+
             {voices.length === 0 ? (
-                <div className="empty-state">
+                <div className="empty-state" style={{ marginBottom: 32 }}>
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 16px', display: 'block', opacity: 0.3 }}><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /></svg>
-                    <h3>Sin voces todavía</h3>
-                    <p>Crea tu primera voz clonada para empezar a generar audiolibros</p>
+                    <h3>Sin voces clonadas</h3>
+                    <p>Crea tu primera voz clonada para usar con Qwen o Cloud</p>
                 </div>
             ) : (
-                <div className="card-grid">
+                <div className="card-grid" style={{ marginBottom: 32 }}>
                     {voices.map(v => (
-                        <div key={v.id} className="card">
+                        <div key={v.id} className="card voice-card-cloned">
                             <div className="card-head">
-                                <div className="voice-avatar">{v.name[0].toUpperCase()}</div>
+                                <div className="voice-avatar" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>{v.name[0].toUpperCase()}</div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div className="card-title">{v.name}</div>
                                     <div className="card-meta">
@@ -264,6 +354,50 @@ export default function VoicesPage() {
                 </div>
             )}
 
+            {/* ── Sección Voces Piper ─────────────────────────────── */}
+            <div className="section-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#8b5cf6' }}>●</span> Voces Piper ({piperVoices.length})
+            </div>
+
+            <div className="card-grid">
+                {piperVoices.map(pv => (
+                    <div key={pv.id} className="card voice-card-piper">
+                        <div className="card-head">
+                            <div className="voice-avatar" style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' }}>{pv.name[0].toUpperCase()}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="card-title">{pv.name}</div>
+                                <div className="card-meta">
+                                    🇪🇸 {pv.language} · Calidad: {qualityLabels[pv.quality] || pv.quality}
+                                </div>
+                            </div>
+                            {pv.downloaded
+                                ? <span className="badge badge-done" style={{ fontSize: 10 }}>Descargada</span>
+                                : <span className="badge badge-pending" style={{ fontSize: 10 }}>No descargada</span>
+                            }
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                            Motor local ligero · Sin clonación · ID: <code style={{ fontSize: 11, color: '#8b5cf6' }}>{pv.id}</code>
+                        </div>
+                        <div className="card-actions">
+                            {pv.downloaded ? (
+                                <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => setTestPiperVoice(pv)}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}><path d="M10 8l6 4-6 4V8z" /></svg>
+                                    Probar
+                                </button>
+                            ) : (
+                                <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => downloadPiperVoice(pv)} disabled={downloading[pv.id]}>
+                                    {downloading[pv.id] ? (
+                                        <><span className="spinner" style={{ marginRight: 4 }}>⏳</span> Descargando...</>
+                                    ) : (
+                                        <>📥 Descargar</>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             {editVoice !== undefined && (
                 <VoiceModal
                     voice={editVoice}
@@ -277,6 +411,14 @@ export default function VoicesPage() {
                 <TestVoiceModal
                     voice={testVoice}
                     onClose={() => setTestVoice(undefined)}
+                    addToast={addToast}
+                />
+            )}
+
+            {testPiperVoice !== undefined && (
+                <TestPiperModal
+                    voice={testPiperVoice}
+                    onClose={() => setTestPiperVoice(undefined)}
                     addToast={addToast}
                 />
             )}

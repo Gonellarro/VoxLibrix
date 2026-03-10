@@ -218,6 +218,67 @@ async def get_book_text(book_id: int, db: AsyncSession = Depends(get_db)):
     return {"text": text}
 
 
+@router.patch("/{book_id}", response_model=schemas.BookResponse)
+async def update_book(
+    book_id: int,
+    title: Optional[str] = Form(None),
+    author_id: Optional[int] = Form(None),
+    author_name: Optional[str] = Form(None),
+    cover: Optional[UploadFile] = File(None),
+    db: AsyncSession = Depends(get_db)
+):
+    book = await db.get(models.Book, book_id)
+    if not book:
+        raise HTTPException(404, "Libro no encontrado")
+    
+    if title:
+        book.title = title
+    
+    if author_name:
+        author_name = author_name.strip()
+        existing = await db.execute(
+            select(models.Author).where(models.Author.name == author_name)
+        )
+        author_obj = existing.scalars().first()
+        if not author_obj:
+            author_obj = models.Author(name=author_name)
+            db.add(author_obj)
+            await db.flush()
+        book.author_id = author_obj.id
+    elif author_id is not None:
+        book.author_id = author_id
+        
+    if cover:
+        covers_dir = os.path.join(DATA_DIR, "covers")
+        os.makedirs(covers_dir, exist_ok=True)
+        ext = os.path.splitext(cover.filename)[1] or ".jpg"
+        cover_filename = f"{uuid.uuid4()}{ext}"
+        cover_path_abs = os.path.join(covers_dir, cover_filename)
+        
+        content = await cover.read()
+        with open(cover_path_abs, "wb") as f:
+            f.write(content)
+        
+        # Eliminar portada vieja si existe
+        if book.cover_path:
+            old_path = os.path.join(DATA_DIR, book.cover_path.lstrip("/"))
+            if os.path.exists(old_path):
+                try: os.remove(old_path)
+                except: pass
+                
+        book.cover_path = f"/covers/{cover_filename}"
+        
+    await db.commit()
+    
+    # Recargar relaciones
+    result = await db.execute(
+        select(models.Book)
+        .options(selectinload(models.Book.author))
+        .where(models.Book.id == book_id)
+    )
+    return result.scalar_one()
+
+
 @router.delete("/{book_id}")
 async def delete_book(book_id: int, db: AsyncSession = Depends(get_db)):
     b = await db.get(models.Book, book_id)

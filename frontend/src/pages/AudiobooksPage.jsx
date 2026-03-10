@@ -9,15 +9,18 @@ function Toast({ toasts }) {
     )
 }
 
-function CreateModal({ voices, books, onClose, onSaved, addToast }) {
+function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast }) {
     const [bookId, setBookId] = useState('')
-    const [narratorId, setNarratorId] = useState('')
+    const [voiceKey, setVoiceKey] = useState('')  // 'cloned:ID' or 'piper:voice_id'
     const [format, setFormat] = useState('mp3')
     const [tags, setTags] = useState([])
     const [mappings, setMappings] = useState({}) // tag -> voice_id
     const [saving, setSaving] = useState(false)
 
     const selectedBook = books.find(b => b.id === Number(bookId))
+    const isPiper = voiceKey.startsWith('piper:')
+    const selectedPiperId = isPiper ? voiceKey.split(':')[1] : null
+    const selectedClonedId = !isPiper && voiceKey ? Number(voiceKey.split(':')[1]) : null
 
     useEffect(() => {
         if (!bookId || selectedBook?.type !== 'multi_voice') { setTags([]); return }
@@ -26,17 +29,23 @@ function CreateModal({ voices, books, onClose, onSaved, addToast }) {
 
     async function save() {
         if (!bookId) return addToast('Selecciona un libro', 'error')
-        if (!narratorId) return addToast('Selecciona una voz narradora', 'error')
+        if (!voiceKey) return addToast('Selecciona una voz', 'error')
 
         const voice_mappings = tags
             .filter(t => mappings[t])
             .map(t => ({ tag_name: t, voice_id: Number(mappings[t]) }))
 
+        // Para Piper: necesitamos un narrator_voice_id (FK obligatoria).
+        // Usamos la primera voz clonada activa como placeholder.
+        const fallbackVoiceId = voices.find(v => v.is_active)?.id || voices[0]?.id
+
         setSaving(true)
         try {
             await api.audiobooks.create({
                 book_id: Number(bookId),
-                narrator_voice_id: Number(narratorId),
+                narrator_voice_id: isPiper ? fallbackVoiceId : selectedClonedId,
+                engine: isPiper ? 'piper' : 'qwen',
+                engine_voice_id: isPiper ? selectedPiperId : null,
                 output_format: format,
                 voice_mappings: voice_mappings.length ? voice_mappings : null,
             })
@@ -67,10 +76,20 @@ function CreateModal({ voices, books, onClose, onSaved, addToast }) {
 
                 <div className="form-group">
                     <label className="form-label">Voz narradora * <span style={{ color: 'var(--muted)', fontWeight: 400, textTransform: 'none' }}>(texto sin tag)</span></label>
-                    <select className="form-select" value={narratorId} onChange={e => setNarratorId(e.target.value)}>
+                    <select className="form-select" value={voiceKey} onChange={e => setVoiceKey(e.target.value)}>
                         <option value="">— Selecciona una voz —</option>
-                        {voices.filter(v => v.is_active).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        <optgroup label="🟢 Voces clonadas (Qwen)">
+                            {voices.filter(v => v.is_active).map(v => <option key={`c-${v.id}`} value={`cloned:${v.id}`}>{v.name}</option>)}
+                        </optgroup>
+                        <optgroup label="🟣 Voces Piper (local)">
+                            {piperVoices.filter(pv => pv.downloaded).map(pv => <option key={`p-${pv.id}`} value={`piper:${pv.id}`}>{pv.name} ({pv.quality})</option>)}
+                        </optgroup>
                     </select>
+                    {voiceKey && (
+                        <div style={{ marginTop: 6, fontSize: 11, color: isPiper ? '#8b5cf6' : '#10b981' }}>
+                            Motor: {isPiper ? '🎺 Piper (local rápido)' : '🏠 Qwen (clonación)'}
+                        </div>
+                    )}
                 </div>
 
                 <div className="form-group">
@@ -459,13 +478,13 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
         }
     }, [ab.id, ab.status])
 
-    async function handleStart(engine = 'qwen') {
+    async function handleStart() {
         try {
-            await api.audiobooks.start(ab.id, engine)
+            await api.audiobooks.start(ab.id, ab.engine || 'qwen')
             setPolling(true)
             fetchProgress()
-            const labels = { qwen: 'QWEN 🏠', piper: 'Piper 🎺', cloud: 'Nube ☁️' }
-            addToast(`Generación iniciada: ${labels[engine] || engine}`, 'info')
+            const labels = { qwen: 'Qwen 🧠', piper: 'Piper 🧠', cloud: 'Nube ☁️' }
+            addToast(`Generación iniciada: ${labels[ab.engine] || ab.engine}`, 'info')
         } catch (e) { addToast(e.message, 'error') }
     }
 
@@ -544,9 +563,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
                                     <button className="btn btn-ghost btn-sm" onClick={handlePause} title="Pausar">⏸</button>
                                 ) : (
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                        <button className="btn btn-primary btn-sm" onClick={() => handleStart('qwen')} title="Motor QWEN (Local)">🏠</button>
-                                        <button className="btn btn-accent btn-sm" onClick={() => handleStart('piper')} title="Motor Piper (Rápido)">🎺</button>
-                                        <button className="btn btn-warning btn-sm" onClick={() => handleStart('cloud')} title="Motor Nube (Modal)">☁️</button>
+                                        <button className="btn btn-primary btn-sm" onClick={() => handleStart()} title={`Generar con ${ab.engine === 'piper' ? 'Piper' : 'Qwen'}`}>🧠</button>
                                     </div>
                                 )}
                                 <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
@@ -562,6 +579,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
 export default function AudiobooksPage() {
     const [audiobooks, setAudiobooks] = useState([])
     const [voices, setVoices] = useState([])
+    const [piperVoices, setPiperVoices] = useState([])
     const [books, setBooks] = useState([])
     const [showModal, setShowModal] = useState(false)
     const [editingAb, setEditingAb] = useState(null)
@@ -576,13 +594,15 @@ export default function AudiobooksPage() {
 
     async function load() {
         try {
-            const [abs, vs, bs] = await Promise.all([
+            const [abs, vs, pv, bs] = await Promise.all([
                 api.audiobooks.list(),
                 api.voices.list(),
+                api.voices.piperVoices(),
                 api.books.list(),
             ])
             setAudiobooks(abs)
             setVoices(vs)
+            setPiperVoices(pv)
             setBooks(bs)
         } catch (e) { addToast(e.message, 'error') }
     }
@@ -602,7 +622,9 @@ export default function AudiobooksPage() {
     const enriched = audiobooks.map(ab => ({
         ...ab,
         bookTitle: books.find(b => b.id === ab.book_id)?.title || (ab.book_id ? `Libro #${ab.book_id}` : 'Libro (eliminado)'),
-        narratorName: voices.find(v => v.id === ab.narrator_voice_id)?.name || `Voz #${ab.narrator_voice_id}`,
+        narratorName: ab.engine === 'piper'
+            ? (piperVoices.find(pv => pv.id === ab.engine_voice_id)?.name || ab.engine_voice_id || 'Piper')
+            : (voices.find(v => v.id === ab.narrator_voice_id)?.name || `Voz #${ab.narrator_voice_id}`),
     }))
 
     return (
@@ -658,6 +680,7 @@ export default function AudiobooksPage() {
             {showModal && (
                 <CreateModal
                     voices={voices}
+                    piperVoices={piperVoices}
                     books={books}
                     onClose={() => setShowModal(false)}
                     onSaved={() => { setShowModal(false); load() }}

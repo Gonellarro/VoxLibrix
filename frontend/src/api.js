@@ -37,6 +37,9 @@ async function reqBlob(method, path, body) {
 export const api = {
     voices: {
         list: () => req('GET', '/voices'),
+        piperVoices: () => req('GET', '/voices/piper'),
+        piperDownload: (voiceId) => req('POST', `/voices/piper/${voiceId}/download`),
+        piperTest: (voiceId, text) => reqBlob('POST', `/voices/piper/${voiceId}/test`, { text }),
         get: (id) => req('GET', `/voices/${id}`),
         create: (form) => req('POST', '/voices', form, true),
         update: (id, form) => req('PUT', `/voices/${id}`, form, true),
@@ -49,6 +52,7 @@ export const api = {
         list: () => req('GET', '/books'),
         get: (id) => req('GET', `/books/${id}`),
         create: (form) => req('POST', '/books', form, true),
+        update: (id, form) => req('PATCH', `/books/${id}`, form, true),
         delete: (id) => req('DELETE', `/books/${id}`),
         tags: (id) => req('GET', `/books/${id}/tags`),
         text: (id) => req('GET', `/books/${id}/text`),

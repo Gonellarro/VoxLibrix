@@ -92,12 +92,103 @@ function BookModal({ onClose, onSaved, addToast }) {
     )
 }
 
+function EditBookModal({ book, onClose, onSaved, addToast }) {
+    const [title, setTitle] = useState(book.title)
+    const [authorId, setAuthorId] = useState(book.author_id || '')
+    const [authorName, setAuthorName] = useState('')
+    const [showNewAuthor, setShowNewAuthor] = useState(false)
+    const [authors, setAuthors] = useState([])
+    const [cover, setCover] = useState(null)
+    const [saving, setSaving] = useState(false)
+    const coverRef = useRef()
+
+    useEffect(() => {
+        api.authors.list().then(setAuthors).catch(() => { })
+    }, [])
+
+    async function save() {
+        if (!title.trim()) return addToast('El título es obligatorio', 'error')
+
+        setSaving(true)
+        try {
+            const form = new FormData()
+            form.append('title', title)
+            if (showNewAuthor && authorName.trim()) {
+                form.append('author_name', authorName)
+            } else {
+                form.append('author_id', authorId)
+            }
+            if (cover) form.append('cover', cover)
+
+            await api.books.update(book.id, form)
+            addToast('Libro actualizado', 'success')
+            onSaved()
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+                <h2 className="modal-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                    Editar libro
+                </h2>
+
+                <div className="form-group">
+                    <label className="form-label">Título</label>
+                    <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <label className="form-label" style={{ marginBottom: 0 }}>Autor</label>
+                        <button className="btn btn-ghost btn-xs" onClick={() => setShowNewAuthor(!showNewAuthor)}>
+                            {showNewAuthor ? 'Seleccionar existente' : 'Crear nuevo'}
+                        </button>
+                    </div>
+                    {showNewAuthor ? (
+                        <input className="form-input" placeholder="Nombre del nuevo autor..." value={authorName} onChange={e => setAuthorName(e.target.value)} />
+                    ) : (
+                        <select className="form-select" value={authorId} onChange={e => setAuthorId(e.target.value)}>
+                            <option value="">— Selecciona un autor —</option>
+                            {authors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                    )}
+                </div>
+
+                <div className="form-group">
+                    <label className="form-label">Portada (opcional)</label>
+                    <div className={`file-drop ${cover ? 'has-file' : ''}`} onClick={() => coverRef.current.click()}>
+                        <input ref={coverRef} type="file" accept="image/*" onChange={e => setCover(e.target.files[0])} />
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                            {cover ? <strong>{cover.name}</strong> : 'Subir nueva portada'}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="modal-footer">
+                    <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={save} disabled={saving}>
+                        {saving ? 'Guardando...' : 'Guardar cambios'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 const TYPE_LABELS = { single_voice: 'Voz única', multi_voice: 'Multi-voz' }
 const TYPE_COLORS = { single_voice: 'var(--primary)', multi_voice: 'var(--accent)' }
 
 export default function BooksPage() {
     const [books, setBooks] = useState([])
     const [showModal, setShowModal] = useState(false)
+    const [editBook, setEditBook] = useState(null)
     const [textBook, setTextBook] = useState(null)
     const [toasts, setToasts] = useState([])
 
@@ -150,8 +241,8 @@ export default function BooksPage() {
                         const dateStr = new Date(b.created_at).toLocaleDateString('es-ES')
 
                         return (
-                            <div key={b.id} className="card book-card horizontal" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
-                                <div className="book-card-left">
+                            <div key={b.id} className="card book-card horizontal">
+                                <div className="book-card-left" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
                                     {coverUrl ? (
                                         <img src={coverUrl} alt={b.title} className="book-cover-img" />
                                     ) : (
@@ -159,7 +250,7 @@ export default function BooksPage() {
                                     )}
                                 </div>
                                 <div className="book-card-right">
-                                    <div className="book-details">
+                                    <div className="book-details" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
                                         <h3 className="book-title" title={b.title}>{b.title}</h3>
                                         <p className="book-author">👤 {b.author?.name || 'Autor desconocido'}</p>
                                         <div className="book-meta-footer">
@@ -168,6 +259,9 @@ export default function BooksPage() {
                                         </div>
                                     </div>
                                     <div className="book-card-actions">
+                                        <button className="btn btn-ghost btn-sm" onClick={() => setEditBook(b)} title="Editar metadatos">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+                                        </button>
                                         <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); remove(b) }} title="Eliminar libro">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                                         </button>
@@ -183,6 +277,14 @@ export default function BooksPage() {
                 <BookModal
                     onClose={() => setShowModal(false)}
                     onSaved={() => { setShowModal(false); load() }}
+                    addToast={addToast}
+                />
+            )}
+            {editBook && (
+                <EditBookModal
+                    book={editBook}
+                    onClose={() => setEditBook(null)}
+                    onSaved={() => { setEditBook(null); load() }}
                     addToast={addToast}
                 />
             )}
