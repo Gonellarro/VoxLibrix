@@ -1343,16 +1343,26 @@ audio {
 
 /* ── Engine Badges ────────────────────────────────────────────────────────── */
 [class^="badge-engine-"] {
+    flex: 1;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+
+    height: 32px;
+    padding: 0 16px;
+    border-radius: 16px;
+
     font-size: 11px;
-    padding: 3px 12px;
-    border-radius: 20px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
+    font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
 }
 
 [class^="badge-engine-"]::before {
-    display: none;
+    display: none !important;
+    content: none !important;
 }
 
 .badge-engine-qwen {
