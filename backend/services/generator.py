@@ -359,16 +359,16 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
         _tasks.pop(audiobook_id, None)
 
 
-def _sanitize_filename(name: str) -> str:
+def sanitize_filename(name: str) -> str:
     """Convierte un título en un nombre de archivo seguro."""
-    from pathvalidate import sanitize_filename
-    return sanitize_filename(name, replacement_text="_").strip("_") or "audiobook"
+    from pathvalidate import sanitize_filename as path_sanitize
+    return path_sanitize(name, replacement_text="_").strip("_") or "audiobook"
 
 
-def _write_mp3_metadata(mp3_path: str, book, author_name: str | None, cover_abs_path: str | None):
+def write_mp3_metadata(mp3_path: str, book, author_name: str | None, cover_abs_path: str | None):
     """Inyecta metadatos ID3v2.4 en un archivo MP3 ya generado."""
     from mutagen.mp3 import MP3
-    from mutagen.id3 import ID3, TIT2, TPE1, TALB, TCON, TDRC, TPUB, COMM, WOAR, APIC, ID3NoHeaderError
+    from mutagen.id3 import TIT2, TPE1, TALB, TCON, TDRC, TPUB, COMM, WOAR, APIC
 
     try:
         audio = MP3(mp3_path)
@@ -427,6 +427,48 @@ def _write_mp3_metadata(mp3_path: str, book, author_name: str | None, cover_abs_
     print(f"✅ Metadatos ID3 escritos en {mp3_path}")
 
 
+async def refresh_audiobook_metadata(audiobook_id: int):
+    """Actualiza etiquetas ID3 y renombra el archivo MP3 si el título cambió."""
+    async with AsyncSessionLocal() as db:
+        ab = await db.get(models.Audiobook, audiobook_id)
+        if not ab or ab.status != "done" or not ab.final_audio_path:
+            return
+
+        result_book = await db.execute(
+            select(models.Book)
+            .options(selectinload(models.Book.author))
+            .where(models.Book.id == ab.book_id)
+        )
+        book = result_book.scalar_one_or_none()
+        if not book:
+            return
+
+        old_path = ab.final_audio_path
+        if not os.path.exists(old_path):
+            return
+
+        # 1. Renombrar si el título cambió
+        fmt = ab.output_format or "mp3"
+        safe_name = sanitize_filename(book.title)
+        out_dir = os.path.dirname(old_path)
+        new_path = os.path.join(out_dir, f"{safe_name}.{fmt}")
+
+        if old_path != new_path:
+            try:
+                os.rename(old_path, new_path)
+                ab.final_audio_path = new_path
+                await db.commit()
+            except Exception as e:
+                print(f"⚠️ Error al renombrar mp3: {e}")
+                new_path = old_path
+
+        # 2. Re-escribir metadatos
+        if fmt == "mp3":
+            author_name = book.author.name if book.author else None
+            cover_abs = os.path.join(DATA_DIR, book.cover_path.lstrip("/")) if book.cover_path else None
+            write_mp3_metadata(new_path, book, author_name, cover_abs)
+
+
 async def _merge(audiobook_id: int, out_dir: str):
     async with AsyncSessionLocal() as db:
         ab = await db.get(models.Audiobook, audiobook_id)
@@ -468,7 +510,7 @@ async def _merge(audiobook_id: int, out_dir: str):
     fmt = ab.output_format or "mp3"
 
     # Nombre del archivo basado en el título del libro
-    safe_name = _sanitize_filename(book.title) if book else f"audiobook_{audiobook_id}"
+    safe_name = sanitize_filename(book.title) if book else f"audiobook_{audiobook_id}"
     final_path = os.path.join(out_dir, f"{safe_name}.{fmt}")
 
     if fmt == "wav":
@@ -483,7 +525,7 @@ async def _merge(audiobook_id: int, out_dir: str):
         if book:
             author_name = book.author.name if book.author else None
             cover_abs = os.path.join(DATA_DIR, book.cover_path.lstrip("/")) if book.cover_path else None
-            _write_mp3_metadata(final_path, book, author_name, cover_abs)
+            write_mp3_metadata(final_path, book, author_name, cover_abs)
 
     # Limpiar chunks temporales de disco y BBDD
     for ch in chunks:

@@ -207,9 +207,9 @@ async def download_audiobook(ab_id: int, db: AsyncSession = Depends(get_db)):
 
     # Intentar generar un nombre bonito basado en el título, 
     # si no, usar el nombre del archivo en disco
-    from services.generator import _sanitize_filename
+    from services.generator import sanitize_filename
     if ab.book:
-        nice_name = _sanitize_filename(ab.book.title)
+        nice_name = sanitize_filename(ab.book.title)
         download_name = f"{nice_name}.{ab.output_format}"
     else:
         download_name = os.path.basename(ab.final_audio_path)
@@ -219,6 +219,13 @@ async def download_audiobook(ab_id: int, db: AsyncSession = Depends(get_db)):
         media_type="audio/mpeg" if ab.output_format == "mp3" else "audio/wav",
         filename=download_name,
     )
+
+
+@router.post("/{ab_id}/refresh-metadata")
+async def refresh_metadata(ab_id: int, db: AsyncSession = Depends(get_db)):
+    """Fuerza la actualización de etiquetas ID3 y nombre de archivo del MP3."""
+    await generator.refresh_audiobook_metadata(ab_id)
+    return {"ok": True}
 
 
 @router.delete("/{ab_id}")

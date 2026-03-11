@@ -75,6 +75,7 @@ export const api = {
         progress: (id) => req('GET', `/audiobooks/${id}/progress`),
         mappings: (id) => req('GET', `/audiobooks/${id}/mappings`),
         update: (id, body) => req('PATCH', `/audiobooks/${id}`, body),
+        refreshMetadata: (id) => req('POST', `/audiobooks/${id}/refresh-metadata`),
         downloadUrl: (id, fmt) => `${BASE}/audiobooks/${id}/download`,
     },
 

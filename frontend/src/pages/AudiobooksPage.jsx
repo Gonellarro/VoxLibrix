@@ -133,6 +133,92 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
     )
 }
 
+function EditAudiobookModal({ ab, onClose, onSaved, addToast }) {
+    const [title, setTitle] = useState(ab.book?.title || '')
+    const [authorName, setAuthorName] = useState(ab.book?.author?.name || '')
+    const [authors, setAuthors] = useState([])
+    const [cover, setCover] = useState(null)
+    const [saving, setSaving] = useState(false)
+    const coverRef = useRef()
+
+    useEffect(() => {
+        api.authors.list().then(setAuthors).catch(() => { })
+    }, [])
+
+    async function save() {
+        if (!title.trim()) return addToast('El título es obligatorio', 'error')
+
+        setSaving(true)
+        try {
+            const form = new FormData()
+            form.append('title', title)
+            form.append('author_name', authorName.trim())
+            if (cover) form.append('cover', cover)
+
+            // 1. Actualizar el libro
+            await api.books.update(ab.book_id, form)
+
+            // 2. Refrescar los tags del MP3
+            await api.audiobooks.refreshMetadata(ab.id)
+
+            addToast('Metadatos actualizados', 'success')
+            onSaved()
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+                <h2 className="modal-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+                    Ajustes de metadatos
+                </h2>
+
+                <div className="form-group">
+                    <label className="form-label">Título</label>
+                    <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                    <label className="form-label">Autor</label>
+                    <input
+                        className="form-input"
+                        placeholder="Escribe el nombre del autor..."
+                        value={authorName}
+                        onChange={e => setAuthorName(e.target.value)}
+                        list="authors-list-ab"
+                    />
+                    <datalist id="authors-list-ab">
+                        {authors.map(a => <option key={a.id} value={a.name} />)}
+                    </datalist>
+                </div>
+
+                <div className="form-group">
+                    <label className="form-label">Portada MP3 (opcional)</label>
+                    <div className={`file-drop ${cover ? 'has-file' : ''}`} onClick={() => coverRef.current.click()}>
+                        <input ref={coverRef} type="file" accept="image/*" onChange={e => setCover(e.target.files[0])} />
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                            {cover ? <strong>{cover.name}</strong> : 'Subir nueva portada'}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="modal-footer">
+                    <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={save} disabled={saving}>
+                        {saving ? 'Guardando y re-etiquetando...' : 'Guardar y aplicar al MP3'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 function TextSelectionModal({ ab, book, onClose, onUpdated, addToast }) {
     const [text, setText] = useState('')
     const [loading, setLoading] = useState(true)
@@ -453,7 +539,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
                 if (p.status === 'done') onRefresh()
             }
         } catch { }
-    }, [ab.id])
+    }, [ab.id, onRefresh])
 
     useEffect(() => {
         let timer
@@ -476,7 +562,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
         } else {
             setProgress({ status: ab.status, percent: ab.status === 'done' ? 100 : 0, total_chunks: ab.total_chunks, completed_chunks: ab.completed_chunks })
         }
-    }, [ab.id, ab.status])
+    }, [ab.id, ab.status, fetchProgress])
 
     async function handleStart() {
         try {
@@ -546,6 +632,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
                             <span className={`badge badge-engine-${ab.engine}`}>{ab.engine === 'piper' ? 'Piper' : ab.engine === 'cloud' ? 'Cloud' : 'Qwen3'}</span>
                             <div style={{ flex: 1 }} />
                             <div className="ab-actions">
+                                <button className="btn btn-ghost btn-sm" onClick={() => onEdit(ab)} title="Ajustes de metadatos">⚙️</button>
                                 <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
                                 <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)} title="Eliminar">🗑</button>
                             </div>
@@ -581,8 +668,9 @@ export default function AudiobooksPage() {
     const [voices, setVoices] = useState([])
     const [piperVoices, setPiperVoices] = useState([])
     const [books, setBooks] = useState([])
-    const [showModal, setShowModal] = useState(false)
-    const [editingAb, setEditingAb] = useState(null)
+    const [showCreate, setShowCreate] = useState(false) // Renamed from showModal for clarity
+    const [editingAb, setEditingAb] = useState(null) // For TextSelectionModal
+    const [editingMetadataAb, setEditingMetadataAb] = useState(null) // For EditAudiobookModal
     const [playingAb, setPlayingAb] = useState(null)
     const [toasts, setToasts] = useState([])
 
@@ -590,6 +678,10 @@ export default function AudiobooksPage() {
         const id = Date.now()
         setToasts(t => [...t, { id, msg, type }])
         setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500)
+    }
+
+    const removeToast = (id) => {
+        setToasts(t => t.filter(x => x.id !== id))
     }
 
     async function load() {
@@ -621,6 +713,7 @@ export default function AudiobooksPage() {
     // Enrich audiobooks with book title
     const enriched = audiobooks.map(ab => ({
         ...ab,
+        book: books.find(b => b.id === ab.book_id), // Pass the whole book object
         bookTitle: books.find(b => b.id === ab.book_id)?.title || (ab.book_id ? `Libro #${ab.book_id}` : 'Libro (eliminado)'),
         narratorName: ab.engine === 'piper'
             ? (piperVoices.find(pv => pv.id === ab.engine_voice_id)?.name || ab.engine_voice_id || 'Piper')
@@ -634,7 +727,7 @@ export default function AudiobooksPage() {
                     <h1 className="page-title">Estudio</h1>
                     <p className="page-subtitle">{audiobooks.length} audiolibro{audiobooks.length !== 1 ? 's' : ''}</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                     Nuevo audiolibro
                 </button>
@@ -665,7 +758,7 @@ export default function AudiobooksPage() {
                                                 onRefresh={load}
                                                 addToast={addToast}
                                                 onRemove={remove}
-                                                onEdit={() => setEditingAb(ab)}
+                                                onEdit={ab.status === 'done' ? setEditingMetadataAb : setEditingAb} // Conditional edit action
                                                 onPlay={() => setPlayingAb(ab)}
                                             />
                                         </div>
@@ -677,14 +770,25 @@ export default function AudiobooksPage() {
                 </>
             )}
 
-            {showModal && (
+            {showCreate && (
                 <CreateModal
                     voices={voices}
                     piperVoices={piperVoices}
                     books={books}
-                    onClose={() => setShowModal(false)}
-                    onSaved={() => { setShowModal(false); load() }}
+                    onClose={() => setShowCreate(false)}
+                    onSaved={() => { setShowCreate(false); load() }}
                     addToast={addToast}
+                />
+            )}
+            {editingMetadataAb && (
+                <EditAudiobookModal
+                    ab={editingMetadataAb}
+                    onClose={() => setEditingMetadataAb(null)}
+                    addToast={addToast}
+                    onSaved={() => {
+                        setEditingMetadataAb(null)
+                        load()
+                    }}
                 />
             )}
             {editingAb && (
