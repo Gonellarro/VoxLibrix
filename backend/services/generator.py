@@ -180,6 +180,11 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
             book = await db.get(models.Book, ab.book_id)
             narrator = await db.get(models.Voice, ab.narrator_voice_id)
 
+            # Asegurar que engine_voice_id esté poblado para qwen/cloud si está nulo
+            if not ab.engine_voice_id and ab.engine in ["qwen", "cloud"]:
+                ab.engine_voice_id = narrator.name
+                await db.commit()
+
             # Mapeo tag → voz (multi_voice)
             tag_map: dict[str, models.Voice] = {}
             if book.type == "multi_voice":

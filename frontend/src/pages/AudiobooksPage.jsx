@@ -589,7 +589,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
     const coverUrl = book?.cover_path ? `/api${book.cover_path}` : null
 
     return (
-        <div className={`card book-card horizontal audiobook-card ab-engine-${ab.engine}`}>
+        <div className={`card book-card horizontal audiobook-card ab-engine-${ab.engine} ab-status-${status} ${isRunning ? 'is-running' : ''}`}>
             <div className="book-card-left" onClick={status === 'done' ? onPlay : onEdit} title={status === 'done' ? 'Reproducir' : 'Editar rango'}>
                 {coverUrl ? (
                     <img src={coverUrl} alt={book?.title} className="book-cover-img" />

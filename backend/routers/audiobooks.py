@@ -36,11 +36,17 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
     if not narrator:
         raise HTTPException(404, "Voz narradora no encontrada")
 
+    # Si no viene engine_voice_id (común en qwen/cloud) y el motor es de referencia
+    # guardamos el nombre de la voz como identificador de motor
+    ev_id = payload.engine_voice_id
+    if not ev_id and payload.engine in ["qwen", "cloud"]:
+        ev_id = narrator.name
+
     ab = models.Audiobook(
         book_id=payload.book_id,
         narrator_voice_id=payload.narrator_voice_id,
         engine=payload.engine,
-        engine_voice_id=payload.engine_voice_id,
+        engine_voice_id=ev_id,
         output_format=payload.output_format,
         status="pending",
         total_words=book.word_count or 0,

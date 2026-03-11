@@ -85,5 +85,11 @@ export const api = {
         createBackup: () => req('POST', '/admin/backup'),
         deleteBackup: (filename) => req('DELETE', `/admin/backups/${filename}`),
         downloadBackupUrl: (filename) => `${BASE}/admin/backups/download/${filename}`,
+        exportDataUrl: () => `${BASE}/admin/export`,
+        importData: (file) => {
+            const form = new FormData()
+            form.append('file', file)
+            return req('POST', '/admin/import', form, true)
+        }
     },
 }

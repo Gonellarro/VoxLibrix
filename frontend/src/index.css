@@ -658,6 +658,59 @@ audio {
     border-color: rgba(139, 92, 246, 0.5) !important;
 }
 
+/* ── Audiobook Status Accents (Top Border & Opacity) ── */
+.audiobook-card {
+    transition: all 0.3s ease !important;
+    border-top: 4px solid transparent !important;
+}
+
+/* PENDING: Fog effect + Muted border */
+.ab-status-pending:not(.is-running) {
+    opacity: 0.6;
+    filter: saturate(0.8);
+    border-top-color: var(--muted) !important;
+}
+
+.ab-status-pending:not(.is-running):hover {
+    opacity: 0.85;
+    filter: saturate(1);
+}
+
+/* PROCESSING: Highlight + Pulse */
+.is-running {
+    opacity: 1 !important;
+    border-top-color: var(--warning) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(245, 158, 11, 0.15) !important;
+    animation: card-active-pulse 2s infinite ease-in-out;
+}
+
+/* COMPLETED: Green top border */
+.ab-status-done {
+    opacity: 1 !important;
+    border-top-color: var(--success) !important;
+}
+
+/* ERROR: Red top border */
+.ab-status-error {
+    opacity: 1 !important;
+    border-top-color: var(--error) !important;
+}
+
+@keyframes card-active-pulse {
+    0% {
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 0 0 rgba(245, 158, 11, 0.2);
+    }
+
+    50% {
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 20px 4px rgba(245, 158, 11, 0.1);
+    }
+
+    100% {
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 0 0 rgba(245, 158, 11, 0.2);
+    }
+}
+
+
 .voice-card-piper code {
     background: rgba(139, 92, 246, 0.1);
     padding: 2px 6px;

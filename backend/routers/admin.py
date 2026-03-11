@@ -2,7 +2,7 @@ import os
 import subprocess
 import shutil
 import time
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile
 from fastapi.responses import FileResponse
 import httpx
 from database import get_db
@@ -61,6 +61,87 @@ async def create_backup():
         return {"ok": True, "filename": backup_name}
     except Exception as e:
         raise HTTPException(500, f"Error ejecutando backup: {str(e)}")
+
+@router.get("/export")
+async def export_data():
+    """Genera un backup completo y lo devuelve como descarga directa"""
+    try:
+        res = await create_backup()
+        filename = res["filename"]
+        path = os.path.join(BACKUP_DIR, filename)
+        return FileResponse(path, filename=filename, media_type="application/gzip")
+    except Exception as e:
+        raise HTTPException(500, f"Error en exportación: {str(e)}")
+
+@router.post("/import")
+async def import_data(file: UploadFile = File(...)):
+    """Importa un archivo .tar.gz, restaura archivos y base de datos"""
+    temp_tar = f"/tmp/import_{time.time()}.tar.gz"
+    extract_dir = f"/tmp/import_extract_{time.time()}"
+    
+    try:
+        # 1. Guardar archivo temporalmente
+        with open(temp_tar, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # 2. Extraer
+        os.makedirs(extract_dir, exist_ok=True)
+        # tar -xzf backup.tar.gz -C extract_dir
+        res = subprocess.run(["tar", "-xzf", temp_tar, "-C", extract_dir], capture_output=True, text=True)
+        if res.returncode != 0:
+            raise Exception(f"Error extrayendo tar: {res.stderr}")
+            
+        # 3. Restaurar Archivos
+        # El tar contiene una carpeta 'data'
+        shared_data_src = os.path.join(extract_dir, "data")
+        if os.path.exists(shared_data_src):
+            # Copiar archivos de libros, voces, covers y output
+            # Usamos -n en cp o simplemente movemos/copiamos sobreescribiendo
+            # Aquí optamos por shutil.copytree con dirs_exist_ok=True (Python 3.8+)
+            for item in os.listdir(shared_data_src):
+                s = os.path.join(shared_data_src, item)
+                d = os.path.join("/", "data", item)
+                if os.path.isdir(s):
+                    shutil.copytree(s, d, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(s, d)
+        
+        # 4. Restaurar base de datos
+        # Buscar el archivo .sql en el directorio extraído
+        sql_file = None
+        for f in os.listdir(extract_dir):
+            if f.endswith(".sql"):
+                sql_file = os.path.join(extract_dir, f)
+                break
+        
+        if sql_file:
+            # Parsear credenciales para psql
+            clean_url = DB_URL.replace("postgresql+asyncpg://", "")
+            creds, rest = clean_url.split("@")
+            user, password = creds.split(":")
+            host, dbname = rest.split("/")
+            
+            env = os.environ.copy()
+            env["PGPASSWORD"] = password
+            
+            # Limpiar tablas actuales (DROP SCHEMA CASCADE es efectivo)
+            clean_cmd = ["psql", "-h", host, "-U", user, "-d", dbname, "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"]
+            subprocess.run(clean_cmd, env=env, capture_output=True)
+            
+            # Restaurar
+            restore_cmd = ["psql", "-h", host, "-U", user, "-d", dbname, "-f", sql_file]
+            res = subprocess.run(restore_cmd, env=env, capture_output=True, text=True)
+            if res.returncode != 0:
+                 raise Exception(f"Error en psql restore: {res.stderr}")
+
+        return {"ok": True, "message": "Importación completada con éxito"}
+        
+    except Exception as e:
+        raise HTTPException(500, f"Error en importación: {str(e)}")
+    finally:
+        # Limpiar
+        if os.path.exists(temp_tar): os.remove(temp_tar)
+        if os.path.exists(extract_dir): shutil.rmtree(extract_dir)
 
 @router.get("/backups")
 async def list_backups():

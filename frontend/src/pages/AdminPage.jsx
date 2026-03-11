@@ -67,6 +67,24 @@ export default function AdminPage() {
         }
     }
 
+    async function handleImport(e) {
+        const file = e.target.files[0]
+        if (!file) return
+        if (!confirm('¿Estás SEGURO? Esto sustituirá la base de datos y archivos actuales por los del paquete importado.')) return
+
+        setLoading(true)
+        addToast('Importando datos, por favor espera...', 'info')
+        try {
+            await api.admin.importData(file)
+            addToast('Importación completada con éxito. Recargando...', 'success')
+            setTimeout(() => window.location.reload(), 2000)
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
     function formatSize(bytes) {
         if (!bytes) return '0 B'
         const k = 1024
@@ -128,6 +146,40 @@ export default function AdminPage() {
                     ) : 'Cargando...'}
                 </div>
             </div>
+            <div className="card" style={{ marginBottom: 30 }}>
+                <h2 className="card-title" style={{ marginBottom: 16 }}>Migración y Transferencia</h2>
+                <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+                    Utiliza estas opciones para mover tu biblioteca a otro servidor. Genera un único archivo con todos tus libros, voces y audiolibros generados.
+                </p>
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <a
+                        href={api.admin.exportDataUrl()}
+                        className="btn btn-primary"
+                        style={{ flex: 1, justifyContent: 'center' }}
+                        onClick={() => addToast('Generando exportación, espera a que comience la descarga...', 'info')}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 8 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                        Exportar Todo
+                    </a>
+                    <button
+                        className="btn btn-ghost"
+                        style={{ flex: 1, justifyContent: 'center' }}
+                        onClick={() => document.getElementById('import-file-input').click()}
+                        disabled={loading}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 8 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                        Importar Paquete
+                    </button>
+                    <input
+                        type="file"
+                        id="import-file-input"
+                        style={{ display: 'none' }}
+                        accept=".tar.gz"
+                        onChange={handleImport}
+                    />
+                </div>
+            </div>
+
             <div className="card" style={{ marginBottom: 30 }}>
                 <h2 className="card-title" style={{ marginBottom: 16 }}>Apariencia</h2>
                 <div style={{ display: 'flex', gap: 12 }}>
