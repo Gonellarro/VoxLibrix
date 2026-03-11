@@ -15,13 +15,16 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Al arrancar: resetear audiolibros que quedaron en 'processing' (reinicio de servidor)
-    async with AsyncSessionLocal() as db:
-        await db.execute(
-            update(models.Audiobook)
-            .where(models.Audiobook.status == "processing")
-            .values(status="pending")
-        )
-        await db.commit()
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                update(models.Audiobook)
+                .where(models.Audiobook.status == "processing")
+                .values(status="pending")
+            )
+            await db.commit()
+    except Exception as e:
+        print(f"Aviso de arranque: No se pudo resetear estados (posiblemente tablas no creadas): {e}")
     yield
 
 
