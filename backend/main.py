@@ -14,7 +14,16 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Al arrancar: resetear audiolibros que quedaron en 'processing' (reinicio de servidor)
+    # 1. Crear tablas si no existen (Imprescindible para instalaciones limpias)
+    from database import Base, engine
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            print("Estructura de base de datos verificada/creada.")
+    except Exception as e:
+        print(f"Error creando esquema inicial: {e}")
+
+    # 2. Resetear estados de procesos interrumpidos
     try:
         async with AsyncSessionLocal() as db:
             await db.execute(
@@ -24,7 +33,7 @@ async def lifespan(app: FastAPI):
             )
             await db.commit()
     except Exception as e:
-        print(f"Aviso de arranque: No se pudo resetear estados (posiblemente tablas no creadas): {e}")
+        print(f"Aviso de arranque: No se pudo resetear estados: {e}")
     yield
 
 
