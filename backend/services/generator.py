@@ -7,6 +7,7 @@ import soundfile as sf
 import numpy as np
 from datetime import datetime
 from sqlalchemy import select, update, delete
+from sqlalchemy.orm import selectinload
 
 import models
 from database import AsyncSessionLocal
@@ -358,9 +359,85 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
         _tasks.pop(audiobook_id, None)
 
 
+def _sanitize_filename(name: str) -> str:
+    """Convierte un título en un nombre de archivo seguro."""
+    from pathvalidate import sanitize_filename
+    return sanitize_filename(name, replacement_text="_").strip("_") or "audiobook"
+
+
+def _write_mp3_metadata(mp3_path: str, book, author_name: str | None, cover_abs_path: str | None):
+    """Inyecta metadatos ID3v2.4 en un archivo MP3 ya generado."""
+    from mutagen.mp3 import MP3
+    from mutagen.id3 import ID3, TIT2, TPE1, TALB, TCON, TDRC, TPUB, COMM, WOAR, APIC, ID3NoHeaderError
+
+    try:
+        audio = MP3(mp3_path)
+    except Exception as e:
+        print(f"⚠️ No se pudieron escribir metadatos: {e}")
+        return
+
+    # Crear tags ID3 si no existen
+    if audio.tags is None:
+        audio.add_tags()
+
+    tags = audio.tags
+
+    # Título
+    tags.add(TIT2(encoding=3, text=[book.title]))
+
+    # Artista / Autor
+    if author_name:
+        tags.add(TPE1(encoding=3, text=[author_name]))
+
+    # Álbum = Título del libro
+    tags.add(TALB(encoding=3, text=[book.title]))
+
+    # Género
+    tags.add(TCON(encoding=3, text=["Audiobook"]))
+
+    # Año
+    year = book.year or datetime.utcnow().year
+    tags.add(TDRC(encoding=3, text=[str(year)]))
+
+    # Editorial
+    if book.publisher:
+        tags.add(TPUB(encoding=3, text=[book.publisher]))
+
+    # Comentario
+    tags.add(COMM(encoding=3, lang="spa", desc="",
+                  text=["Generado por VoxLibrix"]))
+
+    # Web
+    tags.add(WOAR(url="https://voxlibrix.martivich.es"))
+
+    # Portada (APIC)
+    if cover_abs_path and os.path.exists(cover_abs_path):
+        ext = os.path.splitext(cover_abs_path)[1].lower()
+        mime = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+        with open(cover_abs_path, "rb") as img:
+            tags.add(APIC(
+                encoding=3,
+                mime=mime,
+                type=3,  # Cover (front)
+                desc="Cover",
+                data=img.read(),
+            ))
+
+    audio.save()
+    print(f"✅ Metadatos ID3 escritos en {mp3_path}")
+
+
 async def _merge(audiobook_id: int, out_dir: str):
     async with AsyncSessionLocal() as db:
         ab = await db.get(models.Audiobook, audiobook_id)
+        # Cargar libro con su autor
+        result_book = await db.execute(
+            select(models.Book)
+            .options(selectinload(models.Book.author))
+            .where(models.Book.id == ab.book_id)
+        )
+        book = result_book.scalar_one_or_none()
+
         result = await db.execute(
             select(models.AudioChunk)
             .where(models.AudioChunk.audiobook_id == audiobook_id)
@@ -389,7 +466,10 @@ async def _merge(audiobook_id: int, out_dir: str):
 
     merged = np.concatenate(segments)
     fmt = ab.output_format or "mp3"
-    final_path = os.path.join(out_dir, f"audiobook_{audiobook_id}.{fmt}")
+
+    # Nombre del archivo basado en el título del libro
+    safe_name = _sanitize_filename(book.title) if book else f"audiobook_{audiobook_id}"
+    final_path = os.path.join(out_dir, f"{safe_name}.{fmt}")
 
     if fmt == "wav":
         sf.write(final_path, merged, sr)
@@ -398,6 +478,12 @@ async def _merge(audiobook_id: int, out_dir: str):
         sf.write(tmp, merged, sr)
         os.system(f'ffmpeg -y -i "{tmp}" "{final_path}" 2>/dev/null')
         os.remove(tmp)
+
+        # Inyectar metadatos ID3 en el MP3
+        if book:
+            author_name = book.author.name if book.author else None
+            cover_abs = os.path.join(DATA_DIR, book.cover_path.lstrip("/")) if book.cover_path else None
+            _write_mp3_metadata(final_path, book, author_name, cover_abs)
 
     # Limpiar chunks temporales de disco y BBDD
     for ch in chunks:

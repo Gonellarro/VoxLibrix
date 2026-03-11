@@ -193,15 +193,31 @@ async def get_progress(ab_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{ab_id}/download")
 async def download_audiobook(ab_id: int, db: AsyncSession = Depends(get_db)):
-    ab = await db.get(models.Audiobook, ab_id)
+    result = await db.execute(
+        select(models.Audiobook)
+        .options(selectinload(models.Audiobook.book))
+        .where(models.Audiobook.id == ab_id)
+    )
+    ab = result.scalar_one_or_none()
+
     if not ab or ab.status != "done":
         raise HTTPException(404, "Audio no disponible")
     if not ab.final_audio_path or not os.path.exists(ab.final_audio_path):
         raise HTTPException(404, "Archivo de audio no encontrado en disco")
+
+    # Intentar generar un nombre bonito basado en el título, 
+    # si no, usar el nombre del archivo en disco
+    from services.generator import _sanitize_filename
+    if ab.book:
+        nice_name = _sanitize_filename(ab.book.title)
+        download_name = f"{nice_name}.{ab.output_format}"
+    else:
+        download_name = os.path.basename(ab.final_audio_path)
+
     return FileResponse(
         ab.final_audio_path,
         media_type="audio/mpeg" if ab.output_format == "mp3" else "audio/wav",
-        filename=f"audiobook_{ab_id}.{ab.output_format}",
+        filename=download_name,
     )
 
 

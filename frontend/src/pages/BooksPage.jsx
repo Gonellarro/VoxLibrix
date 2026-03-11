@@ -94,9 +94,7 @@ function BookModal({ onClose, onSaved, addToast }) {
 
 function EditBookModal({ book, onClose, onSaved, addToast }) {
     const [title, setTitle] = useState(book.title)
-    const [authorId, setAuthorId] = useState(book.author_id || '')
-    const [authorName, setAuthorName] = useState('')
-    const [showNewAuthor, setShowNewAuthor] = useState(false)
+    const [authorName, setAuthorName] = useState(book.author?.name || '')
     const [authors, setAuthors] = useState([])
     const [cover, setCover] = useState(null)
     const [saving, setSaving] = useState(false)
@@ -113,11 +111,7 @@ function EditBookModal({ book, onClose, onSaved, addToast }) {
         try {
             const form = new FormData()
             form.append('title', title)
-            if (showNewAuthor && authorName.trim()) {
-                form.append('author_name', authorName)
-            } else {
-                form.append('author_id', authorId)
-            }
+            form.append('author_name', authorName.trim())
             if (cover) form.append('cover', cover)
 
             await api.books.update(book.id, form)
@@ -144,20 +138,17 @@ function EditBookModal({ book, onClose, onSaved, addToast }) {
                 </div>
 
                 <div className="form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <label className="form-label" style={{ marginBottom: 0 }}>Autor</label>
-                        <button className="btn btn-ghost btn-xs" onClick={() => setShowNewAuthor(!showNewAuthor)}>
-                            {showNewAuthor ? 'Seleccionar existente' : 'Crear nuevo'}
-                        </button>
-                    </div>
-                    {showNewAuthor ? (
-                        <input className="form-input" placeholder="Nombre del nuevo autor..." value={authorName} onChange={e => setAuthorName(e.target.value)} />
-                    ) : (
-                        <select className="form-select" value={authorId} onChange={e => setAuthorId(e.target.value)}>
-                            <option value="">— Selecciona un autor —</option>
-                            {authors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                    )}
+                    <label className="form-label">Autor</label>
+                    <input
+                        className="form-input"
+                        placeholder="Escribe el nombre del autor..."
+                        value={authorName}
+                        onChange={e => setAuthorName(e.target.value)}
+                        list="authors-list"
+                    />
+                    <datalist id="authors-list">
+                        {authors.map(a => <option key={a.id} value={a.name} />)}
+                    </datalist>
                 </div>
 
                 <div className="form-group">

@@ -70,7 +70,7 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
                     <label className="form-label">Libro *</label>
                     <select className="form-select" value={bookId} onChange={e => setBookId(e.target.value)}>
                         <option value="">— Selecciona un libro —</option>
-                        {books.map(b => <option key={b.id} value={b.id}>{b.title} {b.author ? `· ${b.author}` : ''}</option>)}
+                        {books.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
                     </select>
                 </div>
 
