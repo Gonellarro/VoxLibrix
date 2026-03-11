@@ -641,21 +641,21 @@ audio {
 .ab-engine-qwen,
 .ab-engine-cloud {
     border-left: 3px solid #10b981 !important;
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.01)) !important;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.03)) !important;
 }
 
 .ab-engine-qwen:hover,
 .ab-engine-cloud:hover {
-    border-color: rgba(16, 185, 129, 0.4) !important;
+    border-color: rgba(16, 185, 129, 0.5) !important;
 }
 
 .ab-engine-piper {
     border-left: 3px solid #8b5cf6 !important;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(139, 92, 246, 0.01)) !important;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.03)) !important;
 }
 
 .ab-engine-piper:hover {
-    border-color: rgba(139, 92, 246, 0.4) !important;
+    border-color: rgba(139, 92, 246, 0.5) !important;
 }
 
 .voice-card-piper code {
