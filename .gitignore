@@ -28,4 +28,5 @@ data/postgres/
 # Entorno de python y node
 node_modules/
 __pycache__/
-.envbackend/backups/
+.env
+backend/backups/
