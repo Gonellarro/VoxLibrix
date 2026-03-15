@@ -1,20 +1,20 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import update
+from sqlalchemy import update, select
 
 import os
 from fastapi.staticfiles import StaticFiles
 from database import AsyncSessionLocal
 import models
-from routers import voices, books, audiobooks, authors, admin
+from routers import voices, books, audiobooks, authors, admin, tags
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Crear tablas si no existen (Imprescindible para instalaciones limpias)
+    # 1. Crear tablas si no existen
     from database import Base, engine
     try:
         async with engine.begin() as conn:
@@ -22,6 +22,24 @@ async def lifespan(app: FastAPI):
             print("Estructura de base de datos verificada/creada.")
     except Exception as e:
         print(f"Error creando esquema inicial: {e}")
+
+    # 1b. Seed Tags iniciales
+    try:
+        async with AsyncSessionLocal() as db:
+            initial_tags = [
+                {"name": "pendiente", "color": "#FF9800"},
+                {"name": "favorito", "color": "#E91E63"},
+                {"name": "QWEN", "color": "#4CAF50"},
+                {"name": "PIPER", "color": "#9C27B0"},
+            ]
+            for tag_data in initial_tags:
+                result = await db.execute(select(models.Tag).where(models.Tag.name == tag_data["name"]))
+                if not result.scalars().first():
+                    tag = models.Tag(**tag_data)
+                    db.add(tag)
+            await db.commit()
+    except Exception as e:
+        print(f"Error sembrando tags iniciales: {e}")
 
     # 2. Resetear estados de procesos interrumpidos
     try:
@@ -57,6 +75,7 @@ app.include_router(authors.router, prefix="/authors", tags=["Escritores"])
 app.include_router(voices.router, prefix="/voices", tags=["Voces"])
 app.include_router(books.router, prefix="/books", tags=["Libros"])
 app.include_router(audiobooks.router, prefix="/audiobooks", tags=["Audiolibros"])
+app.include_router(tags.router, prefix="/tags", tags=["Etiquetas"])
 
 # Portadas de libros
 covers_path = os.path.join(DATA_DIR, "covers")

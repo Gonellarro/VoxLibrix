@@ -92,4 +92,14 @@ export const api = {
             return req('POST', '/admin/import', form, true)
         }
     },
+
+    tags: {
+        list: () => req('GET', '/tags'),
+        create: (data) => req('POST', '/tags', data),
+        delete: (id) => req('DELETE', `/tags/${id}`),
+        linkToBook: (bookId, tagId) => req('POST', `/tags/books/${bookId}`, { tag_id: tagId }),
+        unlinkFromBook: (bookId, tagId) => req('DELETE', `/tags/books/${bookId}/${tagId}`),
+        linkToAudiobook: (audiobookId, tagId) => req('POST', `/tags/audiobooks/${audiobookId}`, { tag_id: tagId }),
+        unlinkFromAudiobook: (audiobookId, tagId) => req('DELETE', `/tags/audiobooks/${audiobookId}/${tagId}`),
+    },
 }

@@ -20,7 +20,8 @@ async def list_audiobooks(db: AsyncSession = Depends(get_db)):
         select(models.Audiobook)
         .options(
             selectinload(models.Audiobook.book).selectinload(models.Book.author),
-            selectinload(models.Audiobook.narrator_voice)
+            selectinload(models.Audiobook.narrator_voice),
+            selectinload(models.Audiobook.tags)
         )
         .order_by(models.Audiobook.created_at.desc())
     )
@@ -54,6 +55,15 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
         end_char=payload.end_char
     )
     db.add(ab)
+    
+    # Auto-tagging by engine
+    engine_name = payload.engine.upper()
+    if engine_name in ["QWEN", "PIPER"]:
+        tag_result = await db.execute(select(models.Tag).where(models.Tag.name == engine_name))
+        tag_obj = tag_result.scalars().first()
+        if tag_obj:
+            ab.tags.append(tag_obj)
+            
     await db.commit()
 
     # Guardar mapeos de voces para multi_voice
@@ -72,7 +82,8 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
         select(models.Audiobook)
         .options(
             selectinload(models.Audiobook.book).selectinload(models.Book.author),
-            selectinload(models.Audiobook.narrator_voice)
+            selectinload(models.Audiobook.narrator_voice),
+            selectinload(models.Audiobook.tags)
         )
         .where(models.Audiobook.id == ab.id)
     )
@@ -85,7 +96,8 @@ async def get_audiobook(ab_id: int, db: AsyncSession = Depends(get_db)):
         select(models.Audiobook)
         .options(
             selectinload(models.Audiobook.book).selectinload(models.Book.author),
-            selectinload(models.Audiobook.narrator_voice)
+            selectinload(models.Audiobook.narrator_voice),
+            selectinload(models.Audiobook.tags)
         )
         .where(models.Audiobook.id == ab_id)
     )
@@ -123,7 +135,8 @@ async def update_audiobook(ab_id: int, payload: schemas.AudiobookUpdate, db: Asy
         select(models.Audiobook)
         .options(
             selectinload(models.Audiobook.book).selectinload(models.Book.author),
-            selectinload(models.Audiobook.narrator_voice)
+            selectinload(models.Audiobook.narrator_voice),
+            selectinload(models.Audiobook.tags)
         )
         .where(models.Audiobook.id == ab_id)
     )

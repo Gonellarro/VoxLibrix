@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api.js'
+import TagEditor from '../components/TagEditor.jsx'
 
 function Toast({ toasts }) {
     return (
@@ -8,6 +9,7 @@ function Toast({ toasts }) {
         </div>
     )
 }
+
 
 function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast }) {
     const [bookId, setBookId] = useState('')
@@ -207,6 +209,14 @@ function EditAudiobookModal({ ab, onClose, onSaved, addToast }) {
                         </div>
                     </div>
                 </div>
+
+                <TagEditor
+                    type="audiobook"
+                    entityId={ab.id}
+                    currentTags={ab.tags || []}
+                    addToast={addToast}
+                    onTagsUpdated={onSaved}
+                />
 
                 <div className="modal-footer">
                     <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
@@ -493,10 +503,16 @@ function AudioPlayerModal({ ab, book, onClose, addToast }) {
                         <div className="playback-btns">
                             <button className="btn-player-sub" onClick={() => skip(-15)} title="-15s">↺ 15</button>
 
-                            <button className="btn-player-stop" onClick={handleStop} title="Stop">⏹</button>
+                            <button className="btn-player-stop" onClick={handleStop} title="Stop">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
+                            </button>
 
                             <button className="btn-player-main" onClick={togglePlay}>
-                                {playing ? '⏸' : '▶'}
+                                {playing ? (
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                                ) : (
+                                    <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z" /></svg>
+                                )}
                             </button>
 
                             <button className="btn-player-sub" onClick={() => skip(15)} title="+15s">15 ↻</button>
@@ -607,6 +623,14 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
 
                 <p className="ab-narrator">🎙 {ab.narratorName}</p>
 
+                <div className="tags-list">
+                    {ab.tags?.map(t => (
+                        <span key={t.id} className="tag-badge" style={{ backgroundColor: t.color }}>
+                            {t.name}
+                        </span>
+                    ))}
+                </div>
+
                 <div className="ab-stats-grid">
                     <div className="stat-item">
                         <span className="stat-label">FORMATO</span>
@@ -665,12 +689,14 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
 
 export default function AudiobooksPage() {
     const [audiobooks, setAudiobooks] = useState([])
+    const [allTags, setAllTags] = useState([])
+    const [selectedTagId, setSelectedTagId] = useState(null)
     const [voices, setVoices] = useState([])
     const [piperVoices, setPiperVoices] = useState([])
     const [books, setBooks] = useState([])
-    const [showCreate, setShowCreate] = useState(false) // Renamed from showModal for clarity
-    const [editingAb, setEditingAb] = useState(null) // For TextSelectionModal
-    const [editingMetadataAb, setEditingMetadataAb] = useState(null) // For EditAudiobookModal
+    const [showCreate, setShowCreate] = useState(false)
+    const [editingAb, setEditingAb] = useState(null)
+    const [editingMetadataAb, setEditingMetadataAb] = useState(null)
     const [playingAb, setPlayingAb] = useState(null)
     const [toasts, setToasts] = useState([])
 
@@ -684,22 +710,24 @@ export default function AudiobooksPage() {
         setToasts(t => t.filter(x => x.id !== id))
     }
 
-    async function load() {
+    const load = useCallback(async () => {
         try {
-            const [abs, vs, pv, bs] = await Promise.all([
+            const [abs, vs, pv, bs, ts] = await Promise.all([
                 api.audiobooks.list(),
                 api.voices.list(),
                 api.voices.piperVoices(),
                 api.books.list(),
+                api.tags.list(),
             ])
             setAudiobooks(abs)
             setVoices(vs)
             setPiperVoices(pv)
             setBooks(bs)
+            setAllTags(ts)
         } catch (e) { addToast(e.message, 'error') }
-    }
+    }, [])
 
-    useEffect(() => { load() }, [])
+    useEffect(() => { load() }, [load])
 
     async function remove(id) {
         if (!confirm('¿Eliminar este audiolibro?')) return
@@ -727,10 +755,34 @@ export default function AudiobooksPage() {
                     <h1 className="page-title">Estudio</h1>
                     <p className="page-subtitle">{audiobooks.length} audiolibro{audiobooks.length !== 1 ? 's' : ''}</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                    Nuevo audiolibro
-                </button>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div className="filter-bar" style={{ display: 'flex', gap: 6 }}>
+                        <button
+                            className={`btn btn-xs ${selectedTagId === null ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setSelectedTagId(null)}
+                        >
+                            Todos
+                        </button>
+                        {allTags.map(tag => (
+                            <button
+                                key={tag.id}
+                                className={`btn btn-xs ${selectedTagId === tag.id ? 'btn-primary' : 'btn-ghost'}`}
+                                style={{
+                                    borderColor: tag.color,
+                                    color: selectedTagId === tag.id ? '#fff' : tag.color,
+                                    backgroundColor: selectedTagId === tag.id ? tag.color : 'transparent'
+                                }}
+                                onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)}
+                            >
+                                {tag.name}
+                            </button>
+                        ))}
+                    </div>
+                    <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        Nuevo audiolibro
+                    </button>
+                </div>
             </div>
 
             {enriched.length === 0 ? (
@@ -743,7 +795,10 @@ export default function AudiobooksPage() {
                 <>
                     {/* Group by status */}
                     {['processing', 'pending', 'done', 'error'].map(s => {
-                        const group = enriched.filter(a => a.status === s)
+                        const group = enriched
+                            .filter(a => a.status === s)
+                            .filter(a => !selectedTagId || a.tags?.some(t => t.id === selectedTagId))
+
                         if (!group.length) return null
                         const labels = { processing: 'En proceso', pending: 'Pendientes', done: 'Completados', error: 'Con error' }
                         return (

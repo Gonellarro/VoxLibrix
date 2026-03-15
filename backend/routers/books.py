@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 async def list_books(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(models.Book)
-        .options(selectinload(models.Book.author))
+        .options(selectinload(models.Book.author), selectinload(models.Book.tags))
         .order_by(models.Book.created_at.desc())
     )
     return result.scalars().all()
@@ -162,7 +162,7 @@ async def create_book(
     # Recargar con la relación author para el response
     result = await db.execute(
         select(models.Book)
-        .options(selectinload(models.Book.author))
+        .options(selectinload(models.Book.author), selectinload(models.Book.tags))
         .where(models.Book.id == book.id)
     )
     return result.scalar_one()
@@ -172,7 +172,7 @@ async def create_book(
 async def get_book(book_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(models.Book)
-        .options(selectinload(models.Book.author))
+        .options(selectinload(models.Book.author), selectinload(models.Book.tags))
         .where(models.Book.id == book_id)
     )
     b = result.scalar_one_or_none()
@@ -273,7 +273,7 @@ async def update_book(
     # Recargar relaciones
     result = await db.execute(
         select(models.Book)
-        .options(selectinload(models.Book.author))
+        .options(selectinload(models.Book.author), selectinload(models.Book.tags))
         .where(models.Book.id == book_id)
     )
     return result.scalar_one()

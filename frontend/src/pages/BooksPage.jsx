@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api.js'
+import TagEditor from '../components/TagEditor.jsx'
 
 function Toast({ toasts }) {
     return (
@@ -92,6 +93,7 @@ function BookModal({ onClose, onSaved, addToast }) {
     )
 }
 
+
 function EditBookModal({ book, onClose, onSaved, addToast }) {
     const [title, setTitle] = useState(book.title)
     const [authorName, setAuthorName] = useState(book.author?.name || '')
@@ -162,6 +164,14 @@ function EditBookModal({ book, onClose, onSaved, addToast }) {
                     </div>
                 </div>
 
+                <TagEditor
+                    type="book"
+                    entityId={book.id}
+                    currentTags={book.tags || []}
+                    addToast={addToast}
+                    onTagsUpdated={onSaved}
+                />
+
                 <div className="modal-footer">
                     <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
                     <button className="btn btn-primary" onClick={save} disabled={saving}>
@@ -178,6 +188,8 @@ const TYPE_COLORS = { single_voice: 'var(--primary)', multi_voice: 'var(--accent
 
 export default function BooksPage() {
     const [books, setBooks] = useState([])
+    const [allTags, setAllTags] = useState([])
+    const [selectedTagId, setSelectedTagId] = useState(null)
     const [showModal, setShowModal] = useState(false)
     const [editBook, setEditBook] = useState(null)
     const [textBook, setTextBook] = useState(null)
@@ -189,11 +201,15 @@ export default function BooksPage() {
         setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500)
     }
 
-    async function load() {
-        try { setBooks(await api.books.list()) }
+    const load = useCallback(async () => {
+        try {
+            const [b, t] = await Promise.all([api.books.list(), api.tags.list()])
+            setBooks(b)
+            setAllTags(t)
+        }
         catch (e) { addToast(e.message, 'error') }
-    }
-    useEffect(() => { load() }, [])
+    }, [])
+    useEffect(() => { load() }, [load])
 
     async function remove(book) {
         if (!confirm(`¿Eliminar "${book.title}"? Se eliminarán los audiolibros asociados.`)) return
@@ -213,10 +229,34 @@ export default function BooksPage() {
                     <h1 className="page-title">Biblioteca</h1>
                     <p className="page-subtitle">{books.length} libro{books.length !== 1 ? 's' : ''} en la biblioteca</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                    Añadir libro
-                </button>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div className="filter-bar" style={{ display: 'flex', gap: 6 }}>
+                        <button
+                            className={`btn btn-xs ${selectedTagId === null ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setSelectedTagId(null)}
+                        >
+                            Todos
+                        </button>
+                        {allTags.map(tag => (
+                            <button
+                                key={tag.id}
+                                className={`btn btn-xs ${selectedTagId === tag.id ? 'btn-primary' : 'btn-ghost'}`}
+                                style={{
+                                    borderColor: tag.color,
+                                    color: selectedTagId === tag.id ? '#fff' : tag.color,
+                                    backgroundColor: selectedTagId === tag.id ? tag.color : 'transparent'
+                                }}
+                                onClick={() => setSelectedTagId(selectedTagId === tag.id ? null : tag.id)}
+                            >
+                                {tag.name}
+                            </button>
+                        ))}
+                    </div>
+                    <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        Añadir libro
+                    </button>
+                </div>
             </div>
 
             {books.length === 0 ? (
@@ -227,40 +267,51 @@ export default function BooksPage() {
                 </div>
             ) : (
                 <div className="card-grid">
-                    {books.map(b => {
-                        const coverUrl = b.cover_path ? `/api${b.cover_path}` : null
-                        const dateStr = new Date(b.created_at).toLocaleDateString('es-ES')
+                    {books
+                        .filter(b => !selectedTagId || b.tags?.some(t => t.id === selectedTagId))
+                        .map(b => {
+                            const coverUrl = b.cover_path ? `/api${b.cover_path}` : null
+                            const dateStr = new Date(b.created_at).toLocaleDateString('es-ES')
 
-                        return (
-                            <div key={b.id} className="card book-card horizontal">
-                                <div className="book-card-left" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
-                                    {coverUrl ? (
-                                        <img src={coverUrl} alt={b.title} className="book-cover-img" />
-                                    ) : (
-                                        <div className="book-icon-placeholder">📚</div>
-                                    )}
-                                </div>
-                                <div className="book-card-right">
-                                    <div className="book-details" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
-                                        <h3 className="book-title" title={b.title}>{b.title}</h3>
-                                        <p className="book-author">👤 {b.author?.name || 'Autor desconocido'}</p>
-                                        <div className="book-meta-footer">
-                                            <span>📅 {dateStr}</span>
-                                            <span>📊 {b.word_count?.toLocaleString()} palabras</span>
+                            return (
+                                <div key={b.id} className="card book-card horizontal">
+                                    <div className="book-card-left" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
+                                        {coverUrl ? (
+                                            <img src={coverUrl} alt={b.title} className="book-cover-img" />
+                                        ) : (
+                                            <div className="book-icon-placeholder">📚</div>
+                                        )}
+                                    </div>
+                                    <div className="book-card-right">
+                                        <div className="book-details" onClick={() => setTextBook(b)} style={{ cursor: 'pointer' }}>
+                                            <h3 className="book-title" title={b.title}>{b.title}</h3>
+                                            <p className="book-author">👤 {b.author?.name || 'Autor desconocido'}</p>
+
+                                            <div className="tags-list">
+                                                {b.tags?.map(t => (
+                                                    <span key={t.id} className="tag-badge" style={{ backgroundColor: t.color }}>
+                                                        {t.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+
+                                            <div className="book-meta-footer">
+                                                <span>📅 {dateStr}</span>
+                                                <span>📊 {b.word_count?.toLocaleString()} palabras</span>
+                                            </div>
+                                        </div>
+                                        <div className="book-card-actions">
+                                            <button className="btn btn-ghost btn-sm" onClick={() => setEditBook(b)} title="Editar metadatos">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+                                            </button>
+                                            <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); remove(b) }} title="Eliminar libro">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="book-card-actions">
-                                        <button className="btn btn-ghost btn-sm" onClick={() => setEditBook(b)} title="Editar metadatos">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-                                        </button>
-                                        <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); remove(b) }} title="Eliminar libro">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                                        </button>
-                                    </div>
                                 </div>
-                            </div>
-                        )
-                    })}
+                            )
+                        })}
                 </div>
             )}
 

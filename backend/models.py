@@ -1,8 +1,32 @@
 from datetime import datetime, date
 from typing import Optional, List
-from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, UniqueConstraint, DateTime, Date
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, UniqueConstraint, DateTime, Date, Table
 from sqlalchemy.orm import relationship
 from database import Base
+
+
+# Association tables for Many-to-Many relationships
+book_tag = Table(
+    "book_tag",
+    Base.metadata,
+    Column("book_id", Integer, ForeignKey("book.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),
+)
+
+audiobook_tag = Table(
+    "audiobook_tag",
+    Base.metadata,
+    Column("audiobook_id", Integer, ForeignKey("audiobook.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class Tag(Base):
+    __tablename__ = "tag"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False)
+    color = Column(String(20), default="#808080")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Author(Base):
@@ -47,6 +71,7 @@ class Book(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     author = relationship("Author", back_populates="books")
+    tags = relationship("Tag", secondary=book_tag, backref="books")
 
 
 class Audiobook(Base):
@@ -75,6 +100,7 @@ class Audiobook(Base):
 
     book = relationship("Book")
     narrator_voice = relationship("Voice")
+    tags = relationship("Tag", secondary=audiobook_tag, backref="audiobooks")
 
 
 class AudiobookVoiceMapping(Base):

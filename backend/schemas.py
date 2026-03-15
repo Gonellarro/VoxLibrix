@@ -21,6 +21,26 @@ class AuthorResponse(AuthorBase):
         from_attributes = True
 
 
+# ── Tags ─────────────────────────────────────────────────────────────────────
+
+class TagBase(BaseModel):
+    name: str
+    color: str = "#808080"
+
+class TagCreate(TagBase):
+    pass
+
+class TagResponse(TagBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class TagLink(BaseModel):
+    tag_id: int
+
+
 # ── Voices ──────────────────────────────────────────────────────────────────
 
 class VoiceResponse(BaseModel):
@@ -53,6 +73,7 @@ class BookResponse(BaseModel):
     publisher: Optional[str] = None
     year: Optional[int] = None
     cover_path: Optional[str] = None
+    tags: List[TagResponse] = []
     created_at: datetime
 
     class Config:
@@ -113,6 +134,7 @@ class AudiobookResponse(BaseModel):
     end_char: Optional[int] = None
     last_position: int = 0
     error_message: Optional[str]
+    tags: List[TagResponse] = []
     created_at: datetime
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None

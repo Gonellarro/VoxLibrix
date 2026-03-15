@@ -11,6 +11,104 @@ function Toast({ toasts }) {
     )
 }
 
+function TagManager({ addToast }) {
+    const [tags, setTags] = useState([])
+    const [newName, setNewName] = useState('')
+    const [newColor, setNewColor] = useState('#808080')
+    const [loading, setLoading] = useState(false)
+
+    async function loadTags() {
+        try { setTags(await api.tags.list()) } catch (e) { }
+    }
+
+    useEffect(() => { loadTags() }, [])
+
+    async function createTag() {
+        if (!newName.trim()) return addToast('El nombre es obligatorio', 'error')
+        setLoading(true)
+        try {
+            await api.tags.create({ name: newName.trim(), color: newColor })
+            setNewName('')
+            addToast('Etiqueta creada', 'success')
+            loadTags()
+        } catch (e) {
+            addToast(e.message, 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    async function deleteTag(id) {
+        if (!confirm('¿Eliminar esta etiqueta? Se quitará de todos los libros y audiolibros.')) return
+        try {
+            await api.tags.delete(id)
+            addToast('Etiqueta eliminada', 'success')
+            loadTags()
+        } catch (e) {
+            addToast(e.message, 'error')
+        }
+    }
+
+    const colorOptions = [
+        '#808080', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5',
+        '#2196F3', '#00BCD4', '#009688', '#4CAF50', '#8BC34A',
+        '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722'
+    ]
+
+    return (
+        <div className="card" style={{ marginBottom: 30 }}>
+            <h2 className="card-title" style={{ marginBottom: 16 }}>Gestión de Etiquetas</h2>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+                <input
+                    className="form-input"
+                    placeholder="Nombre de la etiqueta..."
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    style={{ flex: 1 }}
+                />
+                <input
+                    type="color"
+                    value={newColor}
+                    onChange={e => setNewColor(e.target.value)}
+                    style={{ width: 44, height: 44, padding: 2, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface2)', cursor: 'pointer' }}
+                />
+                <button className="btn btn-primary" onClick={createTag} disabled={loading}>
+                    Añadir
+                </button>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {tags.map(tag => (
+                    <div
+                        key={tag.id}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '6px 12px', borderRadius: 8,
+                            backgroundColor: tag.color + '20',
+                            border: `1px solid ${tag.color}`,
+                            color: tag.color,
+                            fontSize: 13, fontWeight: 600
+                        }}
+                    >
+                        {tag.name}
+                        <button
+                            onClick={() => deleteTag(tag.id)}
+                            style={{
+                                background: 'transparent', border: 'none',
+                                color: tag.color, cursor: 'pointer',
+                                padding: 0, fontSize: 16, display: 'flex'
+                            }}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
 export default function AdminPage() {
     const [stats, setStats] = useState(null)
     const [backups, setBackups] = useState([])
@@ -179,6 +277,8 @@ export default function AdminPage() {
                     />
                 </div>
             </div>
+
+            <TagManager addToast={addToast} />
 
             <div className="card" style={{ marginBottom: 30 }}>
                 <h2 className="card-title" style={{ marginBottom: 16 }}>Apariencia</h2>
