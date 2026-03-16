@@ -10,6 +10,16 @@ function Toast({ toasts }) {
     )
 }
 
+const charColors = {}
+const getCharColor = (name) => {
+    if (charColors[name]) return charColors[name]
+    const hues = [200, 280, 20, 150, 330, 60, 240, 10, 180, 300]
+    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    const color = `hsl(${hues[hash % hues.length]}, 70%, 45%)`
+    charColors[name] = color
+    return color
+}
+
 function TextModal({ book, onClose }) {
     const [text, setText] = useState('')
     const [loading, setLoading] = useState(true)
@@ -20,6 +30,35 @@ function TextModal({ book, onClose }) {
             .catch(() => setText('Error al cargar el texto.'))
             .finally(() => setLoading(false))
     }, [book.id])
+
+    const formatText = (content) => {
+        if (!content || book.type !== 'multi_voice') return <pre className="text-content">{content}</pre>
+
+        // Regex para <Tag>Contenido</Tag> incluyendo nuevas líneas
+        const parts = content.split(/(<[^>]+>[\s\S]*?<\/[^>]+>)/g)
+
+        return (
+            <div className="text-content-formatted">
+                {parts.map((part, i) => {
+                    const match = part.match(/<([^>]+)>([\s\S]*?)<\/\1>/)
+                    if (match) {
+                        const tagName = match[1]
+                        const innerText = match[2]
+                        const color = getCharColor(tagName)
+
+                        return (
+                            <span key={i} className="multi-voice-block">
+                                <span className="char-badge" style={{ backgroundColor: color }}>{tagName}</span>
+                                {innerText}
+                                <span className="char-badge" style={{ backgroundColor: color }}>{tagName}</span>
+                            </span>
+                        )
+                    }
+                    return <span key={i}>{part}</span>
+                })}
+            </div>
+        )
+    }
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -33,7 +72,9 @@ function TextModal({ book, onClose }) {
                         <span className="spinner">⏳</span> Cargando texto...
                     </div>
                 ) : (
-                    <pre className="text-content">{text}</pre>
+                    <div className="text-container-v2">
+                        {formatText(text)}
+                    </div>
                 )}
             </div>
         </div>
@@ -42,6 +83,7 @@ function TextModal({ book, onClose }) {
 
 function BookModal({ onClose, onSaved, addToast }) {
     const [file, setFile] = useState(null)
+    const [isMultiVoice, setIsMultiVoice] = useState(false)
     const [saving, setSaving] = useState(false)
     const fileRef = useRef()
 
@@ -52,6 +94,7 @@ function BookModal({ onClose, onSaved, addToast }) {
         try {
             const form = new FormData()
             form.append('txt_file', file)
+            form.append('type', isMultiVoice ? 'multi_voice' : 'single_voice')
             await api.books.create(form)
             addToast('Libro añadido a la biblioteca', 'success')
             onSaved()
@@ -81,6 +124,19 @@ function BookModal({ onClose, onSaved, addToast }) {
                     <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
                         Extraeremos automáticamente el título, autor y portada si es un EPUB.
                     </p>
+                </div>
+
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }} onClick={() => setIsMultiVoice(!isMultiVoice)}>
+                    <input
+                        type="checkbox"
+                        style={{ width: 20, height: 20, cursor: 'pointer' }}
+                        checked={isMultiVoice}
+                        onChange={() => { }}
+                    />
+                    <div>
+                        <strong style={{ display: 'block', fontSize: 14 }}>Contenido Multi-voz</strong>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>Usa etiquetas XML (ej: &lt;Pepe&gt;hola&lt;/Pepe&gt;)</span>
+                    </div>
                 </div>
                 <div className="modal-footer">
                     <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
@@ -288,6 +344,11 @@ export default function BooksPage() {
                                             <p className="book-author">👤 {b.author?.name || 'Autor desconocido'}</p>
 
                                             <div className="tags-list">
+                                                {b.type === 'multi_voice' && (
+                                                    <span className="tag-badge" style={{ backgroundColor: 'var(--accent)', boxShadow: '0 0 10px rgba(6,182,212,0.3)' }}>
+                                                        🎭 MULTI-VOZ
+                                                    </span>
+                                                )}
                                                 {b.tags?.map(t => (
                                                     <span key={t.id} className="tag-badge" style={{ backgroundColor: t.color }}>
                                                         {t.name}

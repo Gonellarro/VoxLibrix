@@ -17,6 +17,7 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
     const [format, setFormat] = useState('mp3')
     const [tags, setTags] = useState([])
     const [mappings, setMappings] = useState({}) // tag -> voice_id
+    const [tagsLoading, setTagsLoading] = useState(false)
     const [saving, setSaving] = useState(false)
 
     const selectedBook = books.find(b => b.id === Number(bookId))
@@ -26,8 +27,12 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
 
     useEffect(() => {
         if (!bookId || selectedBook?.type !== 'multi_voice') { setTags([]); return }
-        api.books.tags(bookId).then(r => setTags(r.tags || [])).catch(() => { })
-    }, [bookId])
+        setTagsLoading(true)
+        api.books.tags(bookId)
+            .then(r => setTags(r.tags || []))
+            .catch(() => { })
+            .finally(() => setTagsLoading(false))
+    }, [bookId, selectedBook?.type])
 
     async function save() {
         if (!bookId) return addToast('Selecciona un libro', 'error')
@@ -102,25 +107,50 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
                     </select>
                 </div>
 
-                {tags.length > 0 && (
+                {selectedBook?.type === 'multi_voice' && (
                     <>
-                        <div className="section-label">Mapeo de personajes</div>
+                        <div className="section-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Mapeo de personajes</span>
+                            {tagsLoading && <span className="spinner" style={{ fontSize: 10 }}>⏳ Buscando personajes...</span>}
+                        </div>
+                        
+                        {!tagsLoading && tags.length === 0 && (
+                            <p style={{ fontSize: 12, color: 'var(--muted)', background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: 8 }}>
+                                No se encontraron personajes marcados con [TAG] en este libro.
+                            </p>
+                        )}
+
                         {tags.map(tag => (
-                            <div className="form-group" key={tag} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                <span style={{
-                                    padding: '4px 10px', borderRadius: 6, background: 'rgba(6,182,212,0.1)',
-                                    color: 'var(--accent)', fontSize: 13, fontWeight: 600, minWidth: 120, flexShrink: 0
-                                }}>[{tag}]</span>
+                            <div className="form-group" key={tag} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+                                <div style={{ 
+                                    padding: '6px 10px', 
+                                    borderRadius: 6, 
+                                    background: 'rgba(6,182,212,0.1)',
+                                    color: 'var(--accent)', 
+                                    fontSize: 12, 
+                                    fontWeight: 700, 
+                                    minWidth: 100, 
+                                    flexShrink: 0,
+                                    border: '1px solid rgba(6,182,212,0.2)',
+                                    textAlign: 'center'
+                                }}>
+                                    &lt;{tag}&gt;
+                                </div>
                                 <select
                                     className="form-select"
                                     value={mappings[tag] || ''}
                                     onChange={e => setMappings(m => ({ ...m, [tag]: e.target.value }))}
                                 >
-                                    <option value="">(voz narradora)</option>
-                                    {voices.filter(v => v.is_active).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                    <option value="">(Usar voz narradora)</option>
+                                    <optgroup label="Voces disponibles">
+                                        {voices.filter(v => v.is_active).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                    </optgroup>
                                 </select>
                             </div>
                         ))}
+                        <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: -8, marginBottom: 16 }}>
+                            * El texto fuera de etiquetas se asignará automáticamente a la voz del narrador.
+                        </p>
                     </>
                 )}
 
@@ -624,7 +654,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
                 <p className="ab-narrator">🎙 {ab.narratorName}</p>
 
                 <div className="tags-list">
-                    {ab.tags?.map(t => (
+                    {ab.tags?.filter(t => t.name !== 'QWEN' && t.name !== 'PIPER').map(t => (
                         <span key={t.id} className="tag-badge" style={{ backgroundColor: t.color }}>
                             {t.name}
                         </span>
@@ -763,7 +793,7 @@ export default function AudiobooksPage() {
                         >
                             Todos
                         </button>
-                        {allTags.map(tag => (
+                        {allTags.filter(t => t.name === 'QWEN' || t.name === 'PIPER').map(tag => (
                             <button
                                 key={tag.id}
                                 className={`btn btn-xs ${selectedTagId === tag.id ? 'btn-primary' : 'btn-ghost'}`}
@@ -806,17 +836,16 @@ export default function AudiobooksPage() {
                                 <div className="section-label">{labels[s]}</div>
                                 <div className="card-grid" style={{ marginBottom: 8 }}>
                                     {group.map(ab => (
-                                        <div key={ab.id} style={{ position: 'relative' }}>
-                                            <ProgressCard
-                                                ab={ab}
-                                                book={books.find(b => b.id === ab.book_id)}
-                                                onRefresh={load}
-                                                addToast={addToast}
-                                                onRemove={remove}
-                                                onEdit={ab.status === 'done' ? setEditingMetadataAb : setEditingAb} // Conditional edit action
-                                                onPlay={() => setPlayingAb(ab)}
-                                            />
-                                        </div>
+                                        <ProgressCard
+                                            key={ab.id}
+                                            ab={ab}
+                                            book={books.find(b => b.id === ab.book_id)}
+                                            onRefresh={load}
+                                            addToast={addToast}
+                                            onRemove={remove}
+                                            onEdit={ab.status === 'done' ? setEditingMetadataAb : setEditingAb}
+                                            onPlay={() => setPlayingAb(ab)}
+                                        />
                                     ))}
                                 </div>
                             </div>

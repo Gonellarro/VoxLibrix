@@ -111,3 +111,31 @@ El proyecto pivota de ser un "creador de MP3s" a una **Plataforma de Conocimient
 - [ ] **Sistema de Usuarios & Auth**: Sincronización de bibliotecas privadas.
 - [ ] **Reproductor PWA**: Interfaz móvil para escuchar en movimiento (Coche/GYM).
 - [ ] **Ingesta de PDFs Técnicos**: Parser inteligente de apuntes y leyes.
+
+---
+
+## v0.4.0 - Multi-Voz Pro & Mobile UX
+*Fecha: 2026-03-16*
+
+Hemos dado un salto cualitativo en la capacidad narrativa del sistema, permitiendo ahora la creación de audiolibros con múltiples personajes y voces, además de profesionalizar la interfaz móvil.
+
+### 10. Narrativa Multi-Personaje (Pepe & Co.)
+- **Soporte XML Nativo**: El sistema ahora parsea etiquetas tipo `<Personaje>texto</Personaje>`.
+- **Mapeo de Voces en Estudio**: Interfaz para asignar voces clonadas específicas a cada personaje detectado en el libro.
+- **Visualización de Badges Cromáticos**: 
+    - En la biblioteca, el texto se formatea automáticamente sustituyendo las etiquetas XML por insignias de colores.
+    - **Cromática Consistente**: Un algoritmo asigna el mismo color a un personaje en todo el libro, facilitando la lectura visual.
+- **Gestión Avanzada de Silencios**:
+    - Pausa por cambio de voz (1.0s) para marcar transiciones entre personajes.
+    - Pausa por punto y aparte (1.0s) para una respiración más natural.
+    - Pausa estándar entre frases (0.5s) para mantener el ritmo narrativo.
+    - Limpieza inteligente de puntuación residual en etiquetas XML para evitar pausas dobles.
+
+### 11. Refinamiento Mobile-First (Responsive)
+- **Diseño de Tarjetas Evolucionado**: Sincronización de la estructura de las tarjetas del Estudio con las de la Biblioteca, permitiendo altura flexible.
+- **Zero-Truncation**: Eliminación de recortes laterales en dispositivos móviles mediante una arquitectura de cuadrícula dinámica.
+- **Filtros Simplificados**: Optimización de la barra de herramientas superior para pantallas pequeñas, priorizando los motores (QWEN/PIPER).
+- **Corrección de Errores Críticos**:
+    - Resolución de fallos asíncronos en base de datos (`MissingGreenlet`) durante la mezcla de audios largos.
+    - Optimización de la rejilla de estadísticas (Formato/Palabras/Tiempo) para lectura en dos columnas en móviles.
+

@@ -54,6 +54,7 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
         start_char=payload.start_char,
         end_char=payload.end_char
     )
+    ab.tags = [] # Initialize collection to avoid async lazy-load error
     db.add(ab)
     
     # Auto-tagging by engine
@@ -64,7 +65,7 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
         if tag_obj:
             ab.tags.append(tag_obj)
             
-    await db.commit()
+    await db.flush() # Flush to get ab.id without expiring the object
 
     # Guardar mapeos de voces para multi_voice
     if payload.voice_mappings:
@@ -75,7 +76,8 @@ async def create_audiobook(payload: schemas.AudiobookCreate, db: AsyncSession = 
                 voice_id=vm.voice_id,
             )
             db.add(mapping)
-        await db.commit()
+    
+    await db.commit()
 
     # Recargar con relaciones para el response
     result = await db.execute(

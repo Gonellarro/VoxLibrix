@@ -794,6 +794,8 @@ audio {
 .audiobook-card {
     transition: all 0.3s ease !important;
     border-top: 4px solid transparent !important;
+    height: auto !important; /* Permitir que crezca más que los 180px de la biblioteca */
+    min-height: 180px;
 }
 
 /* PENDING: Fog effect + Muted border */
@@ -951,6 +953,17 @@ audio {
         gap: 16px;
     }
 
+    .filter-bar {
+        overflow-x: auto;
+        padding-bottom: 4px;
+        width: 100%;
+        scrollbar-width: none; /* Firefox */
+    }
+
+    .filter-bar::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
+    }
+
     .page-header .btn {
         width: 100%;
         justify-content: center;
@@ -1099,6 +1112,17 @@ audio {
     padding: 6px 10px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+    .ab-stats-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        background: transparent;
+        padding: 0;
+        border: none;
+    }
 }
 
 .stat-item {
@@ -1614,4 +1638,50 @@ audio {
 .badge-engine-cloud {
     background: rgba(59, 130, 246, 0.12);
     color: #3b82f6;
+}
+/* ── Multi-voice Book Viewer ─────────────────────────────────────────────── */
+.text-container-v2 {
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid var(--border);
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.text-content-formatted {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+}
+
+.multi-voice-block {
+    display: inline;
+    position: relative;
+    padding: 1px 0;
+    transition: background 0.2s;
+}
+
+.multi-voice-block:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.char-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    padding: 0 6px;
+    margin: 0 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #fff;
+    text-transform: uppercase;
+    vertical-align: middle;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    user-select: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }

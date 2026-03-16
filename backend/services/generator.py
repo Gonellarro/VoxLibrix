@@ -57,6 +57,12 @@ def is_trivial(text: str) -> bool:
 TARGET_CHUNK_WORDS = 60  # Intentamos llegar a este número de palabras
 MAX_CHUNK_WORDS = 75     # Límite estricto para evitar alucinaciones de la IA
 
+# ── TIEMPOS DE PAUSA (en segundos) ──
+PAUSE_VOICE_CHANGE = 1.0  # Pausa al cambiar de personaje o al narrador
+PAUSE_PARAGRAPH = 1.0     # Pausa en punto y aparte
+PAUSE_SENTENCE = 0.5      # Pausa estándar entre frases
+PAUSE_TITLE = 1.0         # Pausa tras el título del libro
+
 
 def merge_short_chunks(chunks: list[dict]) -> list[dict]:
     """Fusiona fragmentos de forma agresiva hasta alcanzar TARGET_CHUNK_WORDS.
@@ -100,45 +106,65 @@ def merge_short_chunks(chunks: list[dict]) -> list[dict]:
 
 
 def parse_chunks(text: str, book_type: str) -> list[dict]:
-    """Divide el texto en fragmentos con su tag, preprocesados y fusionados."""
+    """Divide el texto en fragmentos con su tag, preprocesados y fusionados.
+    Soporta formato <Tag>Contenido</Tag> para multi_voice.
+    """
     chunks = []
     seq = 0
 
     if book_type == "single_voice":
+        # Separación por frases normal
         sentences = [s.strip() for s in re.split(r'(?<=[.!?…])\s+', text) if s.strip()]
         for s in sentences:
             chunks.append({"seq": seq, "tag": None, "text": s})
             seq += 1
     else:
-        current_tag = None
-        buffer = []
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            m = re.match(r'^\[([^\]]+)\](.*)', line)
-            if m:
-                if buffer:
-                    for s in re.split(r'(?<=[.!?…])\s+', " ".join(buffer)):
-                        if s.strip():
-                            chunks.append({"seq": seq, "tag": current_tag, "text": s.strip()})
-                            seq += 1
-                current_tag = m.group(1).strip()
-                rest = m.group(2).strip()
-                buffer = [rest] if rest else []
-            else:
-                buffer.append(line)
-        if buffer:
-            for s in re.split(r'(?<=[.!?…])\s+', " ".join(buffer)):
-                if s.strip():
-                    chunks.append({"seq": seq, "tag": current_tag, "text": s.strip()})
-                    seq += 1
+        # MODO XML: <Personaje>Texto</Personaje>
+        # Buscamos bloques con etiquetas y lo que hay entre ellos
+        # El patrón busca <TAG>...</TAG> capturando el tag y el contenido
+        parts = re.split(r'(<([^>]+)>.*?</\2>)', text, flags=re.DOTALL)
+        
+        # re.split con grupos de captura devuelve: [fuera, completo, tag, fuera, ...]
+        # Pero queremos algo más limpio:
+        raw_parts = []
+        last_pos = 0
+        for m in re.finditer(r'<([^>]+)>(.*?)</\1>', text, flags=re.DOTALL):
+            # Texto antes del tag (Narrador)
+            before = text[last_pos:m.start()].strip()
+            if before:
+                raw_parts.append((None, before))
+            
+            # Contenido del tag
+            tag_name = m.group(1).strip()
+            content = m.group(2).strip()
+            if content:
+                raw_parts.append((tag_name, content))
+            
+            last_pos = m.end()
+        
+        # Texto final (Narrador)
+        after = text[last_pos:].strip()
+        if after:
+            raw_parts.append((None, after))
+
+        # Ahora dividimos cada parte en frases para no tener chunks gigantes
+        for tag, content in raw_parts:
+            # Dividir por frases pero detectar cuál es la última del bloque (párrafo)
+            sentences = [s.strip() for s in re.split(r'(?<=[.!?…])\s+', content) if s.strip()]
+            for i, s in enumerate(sentences):
+                is_para_end = (i == len(sentences) - 1) # Es el final del bloque de texto
+                chunks.append({"seq": seq, "tag": tag, "text": s, "is_para_end": is_para_end})
+                seq += 1
 
     # 1. Fusionar chunks cortos con el siguiente del mismo tag
     chunks = merge_short_chunks(chunks)
 
     # 2. Expandir números a palabras y limpiar cada fragmento
     for ch in chunks:
+        # Limpiar puntuación residual que pueda haber quedado pegada por el formato XML
+        # ej: ", </Tag>" -> "," (esto evita pausas dobles)
+        ch["text"] = re.sub(r'^\s*[,.;:!?]', '', ch["text"]) # Quitar puntuación al inicio del chunk
+        ch["text"] = re.sub(r'[,.;:!?]\s*$', lambda m: m.group(0).strip(), ch["text"]) # Quitar espacios tras puntuación al final
         ch["text"] = preprocess_text(ch["text"])
 
     return chunks
@@ -230,6 +256,7 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                         tag_name=tag,
                         source_text=text,
                         status="pending",
+                        is_para_end=ch.get("is_para_end", False)
                     ))
                 await db.execute(
                     update(models.Audiobook).where(models.Audiobook.id == audiobook_id)
@@ -495,6 +522,7 @@ async def _merge(audiobook_id: int, out_dir: str):
 
     segments = []
     sr = None
+    last_voice_id = None
     for idx, ch in enumerate(chunks):
         if ch.audio_path and os.path.exists(ch.audio_path):
             data, sample_rate = sf.read(ch.audio_path)
@@ -502,11 +530,31 @@ async def _merge(audiobook_id: int, out_dir: str):
                 sr = sample_rate
             if data.ndim > 1:
                 data = data[:, 0]
-            segments.append(data)
-            # Pausa de 1 segundo tras el primer fragmento (título)
+            
+            # ── GESTIÓN DE SILENCIOS ──
+            
+            # 1. Pausa tras el primer fragmento (Título del libro)
             if idx == 0 and len(chunks) > 1:
-                silence = np.zeros(sr, dtype=data.dtype)  # 1s de silencio
+                silence = np.zeros(int(sr * PAUSE_TITLE), dtype=data.dtype)
                 segments.append(silence)
+
+            # 2. Pausa por CAMBIO DE VOZ (Multi-voz)
+            elif last_voice_id is not None and last_voice_id != ch.voice_id:
+                silence = np.zeros(int(sr * PAUSE_VOICE_CHANGE), dtype=data.dtype)
+                segments.append(silence)
+            
+            # 3. Pausa por PUNTO Y APARTE / Cambio de párrafo
+            elif ch.is_para_end:
+                silence_base = np.zeros(int(sr * PAUSE_PARAGRAPH), dtype=data.dtype)
+                segments.append(silence_base)
+            
+            else:
+                # Pausa estándar entre frases
+                silence_base = np.zeros(int(sr * PAUSE_SENTENCE), dtype=data.dtype)
+                segments.append(silence_base)
+
+            segments.append(data)
+            last_voice_id = ch.voice_id
 
     if not segments or sr is None:
         raise RuntimeError("Sin segmentos de audio para mezclar")

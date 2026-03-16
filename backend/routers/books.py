@@ -194,7 +194,7 @@ async def get_tags(book_id: int, db: AsyncSession = Depends(get_db)):
             content = f.read()
         tags = list(dict.fromkeys(
             m.group(1).strip()
-            for m in re.finditer(r'^\[([^\]]+)\]', content, re.MULTILINE)
+            for m in re.finditer(r'<([^>]+)>.*?</\1>', content, re.DOTALL)
         ))
         return {"tags": tags}
     except Exception as e:

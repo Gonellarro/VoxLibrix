@@ -122,6 +122,7 @@ class AudioChunk(Base):
     source_text = Column(Text, nullable=False)
     audio_path = Column(String(500))
     duration_ms = Column(Integer)
+    is_para_end = Column(Boolean, default=False)
     status = Column(String(20), default="pending")
     error_message = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
