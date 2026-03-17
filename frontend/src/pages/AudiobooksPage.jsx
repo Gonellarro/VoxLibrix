@@ -569,7 +569,7 @@ function AudioPlayerModal({ ab, book, onClose, addToast }) {
     )
 }
 
-function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay }) {
+function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay, viewMode = 'grid' }) {
     const [progress, setProgress] = useState(null)
     const [polling, setPolling] = useState(false)
     const [elapsed, setElapsed] = useState(0)
@@ -633,6 +633,57 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
 
     const totalWords = ab.total_words || 0
     const coverUrl = book?.cover_path ? `/api${book.cover_path}` : null
+
+    if (viewMode === 'list') {
+        return (
+            <div className={`list-item audiobook-list-item ab-engine-${ab.engine} ab-status-${status} ${isRunning ? 'is-running' : ''}`}>
+                <div className="list-item-cover" onClick={status === 'done' ? onPlay : onEdit} style={{ cursor: 'pointer' }}>
+                    {coverUrl ? <img src={coverUrl} alt={book?.title} style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4}} /> : '🎧'}
+                </div>
+                <div className="list-item-info" onClick={status === 'done' ? onPlay : onEdit} style={{ cursor: 'pointer' }}>
+                    <div className="list-item-title">{book?.title || `Audiolibro #${ab.id}`}</div>
+                    <div className="list-item-author">🎙 {ab.narratorName}</div>
+                    <div className="list-item-tags">
+                        <span className={`badge badge-sm badge-${status === 'pending' && isRunning ? 'processing' : status}`} style={{fontSize: 9, padding: '1px 6px'}}>
+                            {isRunning ? '...' : status === 'done' ? 'OK' : status}
+                        </span>
+                        <span className={`badge badge-sm badge-engine-${ab.engine}`} style={{fontSize: 9, padding: '1px 6px'}}>{ab.engine}</span>
+                    </div>
+                </div>
+
+                {status !== 'done' && (
+                    <div style={{ width: 60, marginRight: 8 }}>
+                        <div className="progress-bar" style={{height: 4}}>
+                            <div className="progress-fill" style={{ width: `${pct}%` }} />
+                        </div>
+                    </div>
+                )}
+
+                <div className="list-item-meta">
+                    <span>📊 {totalWords.toLocaleString()} pal.</span>
+                    <span>⏱ {elapsed > 0 ? `${Math.floor(elapsed / 60)}:${(elapsed % 60).toString().padStart(2, '0')}` : '--:--'}</span>
+                </div>
+
+                <div className="list-item-actions">
+                    {status === 'done' ? (
+                        <>
+                            <button className="btn btn-ghost btn-sm" onClick={() => onEdit(ab)} title="Ajustes">⚙️</button>
+                            <a className="btn btn-primary btn-sm" href={api.audiobooks.downloadUrl(ab.id)} download title="Descargar">⬇</a>
+                        </>
+                    ) : (
+                        <>
+                            {isRunning ? (
+                                <button className="btn btn-ghost btn-sm" onClick={handlePause}>⏸</button>
+                            ) : (
+                                <button className="btn btn-primary btn-sm" onClick={() => handleStart()}>🧠</button>
+                            )}
+                        </>
+                    )}
+                    <button className="btn btn-danger btn-sm" onClick={() => onRemove(ab.id)}>🗑</button>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className={`card book-card horizontal audiobook-card ab-engine-${ab.engine} ab-status-${status} ${isRunning ? 'is-running' : ''}`}>
@@ -717,6 +768,7 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay 
     )
 }
 
+
 export default function AudiobooksPage() {
     const [audiobooks, setAudiobooks] = useState([])
     const [allTags, setAllTags] = useState([])
@@ -729,6 +781,12 @@ export default function AudiobooksPage() {
     const [editingMetadataAb, setEditingMetadataAb] = useState(null)
     const [playingAb, setPlayingAb] = useState(null)
     const [toasts, setToasts] = useState([])
+    const [viewMode, setViewMode] = useState(localStorage.getItem('studioViewMode') || 'grid')
+
+    useEffect(() => {
+        localStorage.setItem('studioViewMode', viewMode)
+    }, [viewMode])
+
 
     function addToast(msg, type = 'info') {
         const id = Date.now()
@@ -808,7 +866,24 @@ export default function AudiobooksPage() {
                             </button>
                         ))}
                     </div>
+                    <div className="view-toggle">
+                        <button 
+                            className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                            onClick={() => setViewMode('grid')}
+                            title="Vista cuadrícula"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </button>
+                        <button 
+                            className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                            onClick={() => setViewMode('list')}
+                            title="Vista lista"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                        </button>
+                    </div>
                     <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                         Nuevo audiolibro
                     </button>
@@ -834,7 +909,7 @@ export default function AudiobooksPage() {
                         return (
                             <div key={s}>
                                 <div className="section-label">{labels[s]}</div>
-                                <div className="card-grid" style={{ marginBottom: 8 }}>
+                                <div className={viewMode === 'grid' ? "card-grid" : "list-view"} style={{ marginBottom: 16 }}>
                                     {group.map(ab => (
                                         <ProgressCard
                                             key={ab.id}
@@ -845,6 +920,7 @@ export default function AudiobooksPage() {
                                             onRemove={remove}
                                             onEdit={ab.status === 'done' ? setEditingMetadataAb : setEditingAb}
                                             onPlay={() => setPlayingAb(ab)}
+                                            viewMode={viewMode}
                                         />
                                     ))}
                                 </div>

@@ -30,7 +30,9 @@ async def create_book(
     txt_file: UploadFile = File(...),
     title: Optional[str] = Form(None),
     author_id: Optional[int] = Form(None),
+    author_name: Optional[str] = Form(None),
     type: Optional[str] = Form(None),
+    cover: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db),
 ):
     # Valores por defecto si no vienen en el Form
@@ -143,6 +145,30 @@ async def create_book(
         with open(path, "wb") as f:
             f.write(content)
         word_count = len(content.decode("utf-8", errors="ignore").split())
+    
+    # Si tenemos author_name en el Form, lo preferimos / creamos
+    if author_name:
+        author_name = author_name.strip()
+        result = await db.execute(select(models.Author).where(models.Author.name == author_name))
+        author_obj = result.scalars().first()
+        if not author_obj:
+            author_obj = models.Author(name=author_name)
+            db.add(author_obj)
+            await db.flush()
+        author_id = author_obj.id
+
+    # Si nos pasan una portada explícita en el Form, la preferimos
+    if cover:
+        covers_dir = os.path.join(DATA_DIR, "covers")
+        os.makedirs(covers_dir, exist_ok=True)
+        ext = os.path.splitext(cover.filename)[1] or ".jpg"
+        cover_filename = f"{uuid.uuid4()}{ext}"
+        cover_path_abs = os.path.join(covers_dir, cover_filename)
+        
+        c_content = await cover.read()
+        with open(cover_path_abs, "wb") as f:
+            f.write(c_content)
+        cover_path = f"/covers/{cover_filename}"
 
     # Fallback del título: metadatos EPUB > form > nombre del archivo
     final_title = metadata.get('title') or title or os.path.splitext(txt_file.filename)[0]

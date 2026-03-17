@@ -249,6 +249,12 @@ export default function VoicesPage() {
     const [testPiperVoice, setTestPiperVoice] = useState(undefined)
     const [downloading, setDownloading] = useState({})
     const [toasts, setToasts] = useState([])
+    const [viewMode, setViewMode] = useState(localStorage.getItem('voicesViewMode') || 'grid')
+
+    useEffect(() => {
+        localStorage.setItem('voicesViewMode', viewMode)
+    }, [viewMode])
+
 
     function addToast(msg, type = 'info') {
         const id = Date.now()
@@ -304,10 +310,29 @@ export default function VoicesPage() {
                     <h1 className="page-title">Voces</h1>
                     <p className="page-subtitle">{voices.length} clonada{voices.length !== 1 ? 's' : ''} · {piperVoices.length} Piper</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setEditVoice(null)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                    Nueva voz
-                </button>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div className="view-toggle">
+                        <button 
+                            className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                            onClick={() => setViewMode('grid')}
+                            title="Vista cuadrícula"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </button>
+                        <button 
+                            className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                            onClick={() => setViewMode('list')}
+                            title="Vista lista"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <button className="btn btn-primary" onClick={() => setEditVoice(null)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        Nueva voz
+                    </button>
+                </div>
+
             </div>
 
             {/* ── Sección Voces Clonadas ─────────────────────────── */}
@@ -322,35 +347,64 @@ export default function VoicesPage() {
                     <p>Crea tu primera voz clonada para usar con Qwen o Cloud</p>
                 </div>
             ) : (
-                <div className="card-grid" style={{ marginBottom: 32 }}>
-                    {voices.map(v => (
-                        <div key={v.id} className="card voice-card-cloned">
-                            <div className="card-head">
-                                <div className="voice-avatar" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>{v.name[0].toUpperCase()}</div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div className="card-title">{v.name}</div>
-                                    <div className="card-meta">
-                                        <span style={{ color: 'var(--accent)' }}>{v.gender === 'masculine' ? '♂ Masc' : '♀ Fem'}</span> · {v.language === 'Spanish' ? '🇪🇸 ESP' : '🇺🇸 ENG'}
+                <div className={viewMode === 'grid' ? "card-grid" : "list-view"} style={{ marginBottom: 32 }}>
+                    {voices.map(v => {
+                        if (viewMode === 'list') {
+                            return (
+                                <div key={v.id} className="list-item voice-card-cloned">
+                                    <div className="list-item-cover" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontSize: 14 }}>
+                                        {v.name[0].toUpperCase()}
+                                    </div>
+                                    <div className="list-item-info">
+                                        <div className="list-item-title">{v.name}</div>
+                                        <div className="list-item-author">
+                                            {v.gender === 'masculine' ? '♂ Masc' : '♀ Fem'} · {v.language === 'Spanish' ? '🇪🇸' : '🇺🇸'}
+                                        </div>
+                                        <div className="list-item-meta" style={{ marginLeft: 8, opacity: 0.7 }}>
+                                            {v.description || 'Sin descripción'}
+                                        </div>
+                                    </div>
+                                    <span className={`badge ${v.is_active ? 'badge-done' : 'badge-pending'}`} style={{ fontSize: 9, padding: '1px 6px' }}>
+                                        {v.is_active ? 'Activa' : 'Off'}
+                                    </span>
+                                    <div className="list-item-actions">
+                                        <button className="btn btn-primary btn-sm" onClick={() => setTestVoice(v)} title="Probar">▶</button>
+                                        <button className="btn btn-ghost btn-sm" onClick={() => setEditVoice(v)} title="Editar">⚙️</button>
+                                        <button className="btn btn-danger btn-sm" onClick={() => remove(v)} title="Eliminar">🗑</button>
                                     </div>
                                 </div>
-                                <span className={`badge ${v.is_active ? 'badge-done' : 'badge-pending'}`}>
-                                    {v.is_active ? 'Activa' : 'Inactiva'}
-                                </span>
+                            )
+                        }
+
+                        return (
+                            <div key={v.id} className="card voice-card-cloned">
+                                <div className="card-head">
+                                    <div className="voice-avatar" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>{v.name[0].toUpperCase()}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div className="card-title">{v.name}</div>
+                                        <div className="card-meta">
+                                            <span style={{ color: 'var(--accent)' }}>{v.gender === 'masculine' ? '♂ Masc' : '♀ Fem'}</span> · {v.language === 'Spanish' ? '🇪🇸 ESP' : '🇺🇸 ENG'}
+                                        </div>
+                                    </div>
+                                    <span className={`badge ${v.is_active ? 'badge-done' : 'badge-pending'}`}>
+                                        {v.is_active ? 'Activa' : 'Inactiva'}
+                                    </span>
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, minHeight: 32 }}>
+                                    {v.description || 'Sin descripción adicional.'}
+                                </div>
+                                <audio src={api.voices.sampleUrl(v.id)} controls />
+                                <div className="card-actions">
+                                    <button className="btn btn-primary btn-sm" onClick={() => setTestVoice(v)}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}><path d="M10 8l6 4-6 4V8z" /></svg>
+                                        Probar
+                                    </button>
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setEditVoice(v)}>Editar</button>
+                                    <button className="btn btn-danger btn-sm" onClick={() => remove(v)}>Eliminar</button>
+                                </div>
                             </div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, minHeight: 32 }}>
-                                {v.description || 'Sin descripción adicional.'}
-                            </div>
-                            <audio src={api.voices.sampleUrl(v.id)} controls />
-                            <div className="card-actions">
-                                <button className="btn btn-primary btn-sm" onClick={() => setTestVoice(v)}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}><path d="M10 8l6 4-6 4V8z" /></svg>
-                                    Probar
-                                </button>
-                                <button className="btn btn-ghost btn-sm" onClick={() => setEditVoice(v)}>Editar</button>
-                                <button className="btn btn-danger btn-sm" onClick={() => remove(v)}>Eliminar</button>
-                            </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
 
@@ -359,43 +413,75 @@ export default function VoicesPage() {
                 <span style={{ color: '#8b5cf6' }}>●</span> Voces Piper ({piperVoices.length})
             </div>
 
-            <div className="card-grid">
-                {piperVoices.map(pv => (
-                    <div key={pv.id} className="card voice-card-piper">
-                        <div className="card-head">
-                            <div className="voice-avatar" style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' }}>{pv.name[0].toUpperCase()}</div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div className="card-title">{pv.name}</div>
-                                <div className="card-meta">
-                                    🇪🇸 {pv.language} · Calidad: {qualityLabels[pv.quality] || pv.quality}
+            <div className={viewMode === 'grid' ? "card-grid" : "list-view"}>
+                {piperVoices.map(pv => {
+                    if (viewMode === 'list') {
+                        return (
+                            <div key={pv.id} className="list-item voice-card-piper">
+                                <div className="list-item-cover" style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: '#fff', fontSize: 14 }}>
+                                    {pv.name[0].toUpperCase()}
+                                </div>
+                                <div className="list-item-info">
+                                    <div className="list-item-title">{pv.name}</div>
+                                    <div className="list-item-author">🎺 Piper · {pv.language}</div>
+                                    <div className="list-item-meta" style={{ opacity: 0.7 }}>
+                                        Calidad: {qualityLabels[pv.quality] || pv.quality}
+                                    </div>
+                                </div>
+                                {pv.downloaded
+                                    ? <span className="badge badge-done" style={{ fontSize: 9, padding: '1px 6px' }}>OK</span>
+                                    : <span className="badge badge-pending" style={{ fontSize: 9, padding: '1px 6px' }}>📥</span>
+                                }
+                                <div className="list-item-actions">
+                                    {pv.downloaded ? (
+                                        <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => setTestPiperVoice(pv)} title="Probar">▶</button>
+                                    ) : (
+                                        <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => downloadPiperVoice(pv)} disabled={downloading[pv.id]}>
+                                            {downloading[pv.id] ? '⏳' : '📥'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
-                            {pv.downloaded
-                                ? <span className="badge badge-done" style={{ fontSize: 10 }}>Descargada</span>
-                                : <span className="badge badge-pending" style={{ fontSize: 10 }}>No descargada</span>
-                            }
+                        )
+                    }
+
+                    return (
+                        <div key={pv.id} className="card voice-card-piper">
+                            <div className="card-head">
+                                <div className="voice-avatar" style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' }}>{pv.name[0].toUpperCase()}</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div className="card-title">{pv.name}</div>
+                                    <div className="card-meta">
+                                        🇪🇸 {pv.language} · Calidad: {qualityLabels[pv.quality] || pv.quality}
+                                    </div>
+                                </div>
+                                {pv.downloaded
+                                    ? <span className="badge badge-done" style={{ fontSize: 10 }}>Descargada</span>
+                                    : <span className="badge badge-pending" style={{ fontSize: 10 }}>No descargada</span>
+                                }
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                                Motor local ligero · Sin clonación · ID: <code style={{ fontSize: 11, color: '#8b5cf6' }}>{pv.id}</code>
+                            </div>
+                            <div className="card-actions">
+                                {pv.downloaded ? (
+                                    <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => setTestPiperVoice(pv)}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}><path d="M10 8l6 4-6 4V8z" /></svg>
+                                        Probar
+                                    </button>
+                                ) : (
+                                    <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => downloadPiperVoice(pv)} disabled={downloading[pv.id]}>
+                                        {downloading[pv.id] ? (
+                                            <><span className="spinner" style={{ marginRight: 4 }}>⏳</span> Descargando...</>
+                                        ) : (
+                                            <>📥 Descargar</>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
-                            Motor local ligero · Sin clonación · ID: <code style={{ fontSize: 11, color: '#8b5cf6' }}>{pv.id}</code>
-                        </div>
-                        <div className="card-actions">
-                            {pv.downloaded ? (
-                                <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => setTestPiperVoice(pv)}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}><path d="M10 8l6 4-6 4V8z" /></svg>
-                                    Probar
-                                </button>
-                            ) : (
-                                <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff' }} onClick={() => downloadPiperVoice(pv)} disabled={downloading[pv.id]}>
-                                    {downloading[pv.id] ? (
-                                        <><span className="spinner" style={{ marginRight: 4 }}>⏳</span> Descargando...</>
-                                    ) : (
-                                        <>📥 Descargar</>
-                                    )}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                ))}
+                    )
+                })}
             </div>
 
             {editVoice !== undefined && (
