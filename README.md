@@ -34,10 +34,10 @@ El sistema utiliza una arquitectura de microservicios orquestada con Docker:
 - Al menos 8GB de RAM (16GB recomendado).
 
 ### 2. Despliegue Rápido
-Para lanzar la plataforma en modo de compatibilidad (CPU/AMD):
+Para lanzar la plataforma en el modo estándar (CPU):
 
 ```bash
-docker compose --profile amd up --build
+docker compose --profile cpu up --build
 ```
 
 ### 3. Primeros Pasos

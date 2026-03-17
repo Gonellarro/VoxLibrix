@@ -1,11 +1,11 @@
 services:
-  # --- Motor AMD / CPU ---
-  tts-engine-amd:
-    profiles: [ "amd" ]
+  # --- Motor CPU / Genérico ---
+  tts-engine-cpu:
+    profiles: [ "cpu" ]
     build:
       context: ./tts-engine
-      dockerfile: Dockerfile.amd
-    container_name: tts-engine-amd
+      dockerfile: Dockerfile.cpu
+    container_name: tts-engine-cpu
     user: "1000:1000"
     expose:
       - "8000"
@@ -86,7 +86,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://audio_user:audio_pass@postgres/audiobooks
       - TTS_ENGINE_URL=http://tts-engine:8000
-      - CLOUD_TTS_URL=https://marti-vich--voxlibrix-tts-tts-tts.modal.run
       - DATA_DIR=/data
       - PYTHONUNBUFFERED=1
     depends_on:
