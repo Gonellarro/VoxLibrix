@@ -34,7 +34,14 @@ El sistema utiliza una arquitectura de microservicios orquestada con Docker:
 - Al menos 8GB de RAM (16GB recomendado).
 
 ### 2. Despliegue Rápido
-Para lanzar la plataforma en el modo estándar (CPU):
+
+> [!IMPORTANT]
+> **Permisos de Escritura:** El contenedor se ejecuta con un usuario no-root (UID 1000). Para evitar errores de permisos al crear carpetas de datos, ejecuta el script de configuración inicial:
+> ```bash
+> chmod +x setup.sh && ./setup.sh
+> ```
+
+Luego, lanza la plataforma en el modo estándar (CPU):
 
 ```bash
 docker compose --profile cpu up --build
