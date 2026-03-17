@@ -114,28 +114,31 @@ El proyecto pivota de ser un "creador de MP3s" a una **Plataforma de Conocimient
 
 ---
 
-## v0.4.0 - Multi-Voz Pro & Mobile UX
-*Fecha: 2026-03-16*
+---
 
-Hemos dado un salto cualitativo en la capacidad narrativa del sistema, permitiendo ahora la creación de audiolibros con múltiples personajes y voces, además de profesionalizar la interfaz móvil.
+## v0.5.0 - Gestión de Biblioteca Avanzada & Vista de Lista
+*Fecha: 2026-03-17*
 
-### 10. Narrativa Multi-Personaje (Pepe & Co.)
-- **Soporte XML Nativo**: El sistema ahora parsea etiquetas tipo `<Personaje>texto</Personaje>`.
-- **Mapeo de Voces en Estudio**: Interfaz para asignar voces clonadas específicas a cada personaje detectado en el libro.
-- **Visualización de Badges Cromáticos**: 
-    - En la biblioteca, el texto se formatea automáticamente sustituyendo las etiquetas XML por insignias de colores.
-    - **Cromática Consistente**: Un algoritmo asigna el mismo color a un personaje en todo el libro, facilitando la lectura visual.
-- **Gestión Avanzada de Silencios**:
-    - Pausa por cambio de voz (1.0s) para marcar transiciones entre personajes.
-    - Pausa por punto y aparte (1.0s) para una respiración más natural.
-    - Pausa estándar entre frases (0.5s) para mantener el ritmo narrativo.
-    - Limpieza inteligente de puntuación residual en etiquetas XML para evitar pausas dobles.
+Hemos centrado esta actualización en la eficiencia operativa de la biblioteca, permitiendo gestionar colecciones grandes con mayor comodidad y simplificando la ingesta de nuevos contenidos.
 
-### 11. Refinamiento Mobile-First (Responsive)
-- **Diseño de Tarjetas Evolucionado**: Sincronización de la estructura de las tarjetas del Estudio con las de la Biblioteca, permitiendo altura flexible.
-- **Zero-Truncation**: Eliminación de recortes laterales en dispositivos móviles mediante una arquitectura de cuadrícula dinámica.
-- **Filtros Simplificados**: Optimización de la barra de herramientas superior para pantallas pequeñas, priorizando los motores (QWEN/PIPER).
-- **Corrección de Errores Críticos**:
-    - Resolución de fallos asíncronos en base de datos (`MissingGreenlet`) durante la mezcla de audios largos.
-    - Optimización de la rejilla de estadísticas (Formato/Palabras/Tiempo) para lectura en dos columnas en móviles.
+### 12. Interfaz de Alta Densidad (List View)
+- **Modo Lista Global**: Implementación de un selector de vista (Cuadrícula/Lista) en las secciones de **Biblioteca**, **Estudio** y **Voces**.
+- **Persistencia de Preferencia**: El sistema recuerda el modo de vista elegido por el usuario para cada sección mediante `localStorage`.
+- **Diseño de Fila Única**: 
+    - Optimización de espacio para mostrar título, autor, etiquetas y metadatos en una sola línea.
+    - Acciones rápidas (Editar, Reproducir, Eliminar, Descargar) accesibles sin necesidad de abrir menús.
+- **Sincronización de Estilos**: Consistencia visual entre el modo lista de libros, audiolibros y voces clonadas/Piper.
+
+### 13. Ingesta de Metadatos en un Solo Paso
+- **Modal de Creación Extendido**: Ahora es posible definir metadatos críticos en el momento de la subida:
+    - **Título y Autor**: Selección manual o edición de los datos extraídos del EPUB.
+    - **Carga de Portada**: Subida directa de imagen de carátula junto con el archivo (.epub/.txt).
+    - **Asignación de Etiquetas**: Selector de tags integrado en el proceso de creación.
+- **Datalist de Autores**: Sugerencia automática de autores ya existentes para mantener la base de datos limpia.
+- **Prioridad de Usuario**: El sistema ahora respeta los metadatos introducidos manualmente sobre los automáticos detectados en archivos EPUB.
+
+### 14. Mejoras Técnicas & Backend
+- **Nuevos Endpoints**: Actualización de la API de Libros para procesar formularios multipart con título, autor y portada simultáneamente.
+- **Gestión de Archivos**: Sistema balanceado para ignorar o sobreescribir portadas extraídas según la acción del usuario.
+- **Optimización de Carga**: Mejora en el refresco de componentes tras la creación o edición masiva.
 
