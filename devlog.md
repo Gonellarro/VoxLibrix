@@ -34,12 +34,12 @@ En esta versión nos centramos en la eficiencia de la biblioteca y la facilidad 
 - **Metadatos en un solo paso**: Nueva interfaz para definir Título, Autor, Portada y Etiquetas directamente en el modal de subida.
 - **Datalist de Autores**: Sugerencias automáticas de autores existentes para evitar duplicados.
 - **Motor CPU Estándar**: Unificación del motor genérico bajo el perfil `cpu` para evitar confusiones de arquitectura.
+- **Retorno a la Nube (Modal.com)**: Recuperación del botón de generación en la nube para equipos con recursos limitados (como el N100).
 
 ---
 
 ## 🔮 Roadmap / Futuro (No implementado)
 
 - **Aceleración GPU (CUDA/NVIDIA)**: Pendiente de implementación y pruebas de estabilidad.
-- **Integración Cloud**: Pruebas conceptuales con Modal.com (actualmente no operativas).
 - **Sistema de Usuarios**: Sincronización de bibliotecas y perfiles personales.
 - **Reproductor PWA**: Interfaz de escucha optimizada para consumo móvil offline.

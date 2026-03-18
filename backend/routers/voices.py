@@ -12,6 +12,7 @@ from services.generator import backend_to_tts_path
 router = APIRouter()
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 TTS_URL = os.environ.get("TTS_ENGINE_URL", "http://tts-engine:8000")
+CLOUD_TTS_URL = os.environ.get("CLOUD_TTS_URL")
 
 
 @router.get("/piper")
@@ -180,9 +181,18 @@ async def delete_voice(voice_id: int, db: AsyncSession = Depends(get_db)):
             os.remove(v.sample_path)
         except OSError:
             pass
-    await db.delete(v)
-    await db.commit()
-    return {"ok": True}
+    try:
+        await db.delete(v)
+        await db.commit()
+        return {"ok": True}
+    except Exception as e:
+        await db.rollback()
+        # Suele ser una IntegrityError porque la voz se usa en un Audiobook o Mapping
+        print(f"🔥 Error al borrar voz {voice_id}: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail="No se puede eliminar esta voz porque está siendo usada por audiolibros existentes. Borra primero los audiolibros asociados."
+        )
 
 
 @router.get("/{voice_id}/sample")
@@ -201,6 +211,7 @@ async def test_voice(voice_id: int, payload: schemas.VoiceTestRequest, db: Async
     
     async with httpx.AsyncClient(timeout=600) as client:
         try:
+            # 🏠 MODO LOCAL (Forzado por usuario)
             resp = await client.post(f"{TTS_URL}/tts", json={
                 "text": payload.text,
                 "language": "Spanish",
@@ -210,4 +221,6 @@ async def test_voice(voice_id: int, payload: schemas.VoiceTestRequest, db: Async
             resp.raise_for_status()
             return Response(content=resp.content, media_type="audio/wav")
         except Exception as e:
-            raise HTTPException(500, f"Error en motor TTS: {str(e)}")
+            error_msg = str(e)
+            print(f"🔥 Error en test_voice: {error_msg}")
+            raise HTTPException(500, f"Error en motor TTS: {error_msg}")

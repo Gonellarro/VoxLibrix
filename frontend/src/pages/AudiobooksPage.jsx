@@ -19,6 +19,7 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
     const [mappings, setMappings] = useState({}) // tag -> voice_id
     const [tagsLoading, setTagsLoading] = useState(false)
     const [saving, setSaving] = useState(false)
+    const [useCloud, setUseCloud] = useState(false)
 
     const selectedBook = books.find(b => b.id === Number(bookId))
     const isPiper = voiceKey.startsWith('piper:')
@@ -51,7 +52,7 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
             await api.audiobooks.create({
                 book_id: Number(bookId),
                 narrator_voice_id: isPiper ? fallbackVoiceId : selectedClonedId,
-                engine: isPiper ? 'piper' : 'qwen',
+                engine: useCloud ? 'cloud' : (isPiper ? 'piper' : 'qwen'),
                 engine_voice_id: isPiper ? selectedPiperId : null,
                 output_format: format,
                 voice_mappings: voice_mappings.length ? voice_mappings : null,
@@ -98,6 +99,27 @@ function CreateModal({ voices, piperVoices, books, onClose, onSaved, addToast })
                         </div>
                     )}
                 </div>
+
+                {!isPiper && (
+                    <div className="form-group">
+                        <label className="form-checkbox" style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                            <input 
+                                type="checkbox" 
+                                checked={useCloud} 
+                                onChange={e => setUseCloud(e.target.checked)}
+                                style={{ width: 18, height: 18 }}
+                            />
+                            <div>
+                                <span style={{ fontWeight: 600, color: useCloud ? 'var(--accent)' : 'inherit' }}>
+                                    ☁️ Usar generación en la Nube (Modal.com)
+                                </span>
+                                <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, marginBottom: 0 }}>
+                                    Más rápido y ahorra RAM local. Requiere configuración previa.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                )}
 
                 <div className="form-group">
                     <label className="form-label">Formato de salida</label>
