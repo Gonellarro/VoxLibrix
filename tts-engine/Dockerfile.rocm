@@ -1,0 +1,72 @@
+# Imagen base con soporte ROCm para AMD
+# Usamos Ubuntu 24.04 como solicitó el usuario
+FROM ubuntu:24.04
+
+# Evitar prompts interactivos
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Instalar dependencias de sistema y herramientas para configurar el repositorio de ROCm
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    libsndfile1 \
+    ffmpeg \
+    sox \
+    libsox-fmt-all \
+    wget \
+    gnupg2 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configurar el repositorio oficial de ROCm 6.2 para Ubuntu 24.04 (Noble)
+RUN mkdir -p /etc/apt/keyrings && \
+    wget -qO - https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor -o /etc/apt/keyrings/rocm.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.2 noble main" > /etc/apt/sources.list.d/rocm.list
+
+# Priorizar el repositorio de AMD para evitar conflictos con los paquetes antiguos de Ubuntu
+RUN echo "Package: *\nPin: origin repo.radeon.com\nPin-Priority: 1000" > /etc/apt/preferences.d/rocm-pin-1000
+
+# Instalar el SDK de HIP (incluye drivers de usuario y compiladores necesarios para gfx1103)
+RUN apt-get update && apt-get install -y \
+    rocm-hip-sdk \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Asegurar que el usuario con UID 1000 exista y tenga los permisos adecuados
+RUN if ! getent group 1000; then groupadd -g 1000 vox; fi && \
+    if ! getent passwd 1000; then useradd -u 1000 -g 1000 -m vox; fi && \
+    chown -R 1000:1000 /app
+
+# Instalar PyTorch con soporte ROCm 6.2
+# --break-system-packages se usa porque Ubuntu 24.04 fuerza entornos virtuales por defecto
+RUN pip3 install --no-cache-dir --break-system-packages \
+    torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.2
+
+# Instalar dependencias de Qwen-TTS
+RUN pip3 install --no-cache-dir --break-system-packages \
+    qwen-tts \
+    soundfile \
+    fastapi \
+    uvicorn[standard] \
+    python-multipart \
+    accelerate \
+    transformers
+
+# Copiar el servidor
+COPY servidor_tts.py .
+
+# Configuración del motor para AMD iGPU (Radeon 780M / gfx1103)
+ENV HF_HOME=/models
+ENV DEVICE=cuda:0
+ENV DTYPE=bfloat16
+# El override crucial para que gfx1103 use kernels de gfx1100
+ENV HSA_OVERRIDE_GFX_VERSION=11.0.0
+
+EXPOSE 8000
+
+# Ejecutar como usuario 1000 (standard docker user / ubuntu default)
+USER 1000
+
+CMD ["uvicorn", "servidor_tts:app", "--host", "0.0.0.0", "--port", "8000"]

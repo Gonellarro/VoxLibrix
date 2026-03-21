@@ -41,6 +41,8 @@ COPY servidor_tts.py .
 
 # El modelo se descarga en /models (montado como volumen)
 ENV HF_HOME=/models
+ENV DEVICE=cuda:0
+ENV DTYPE=bfloat16
 
 EXPOSE 8000
 

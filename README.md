@@ -33,19 +33,20 @@ El sistema utiliza una arquitectura de microservicios orquestada con Docker:
 - Docker y Docker Compose instalados.
 - Al menos 8GB de RAM (16GB recomendado).
 
-### 2. Despliegue Rápido
+### 2. Configuración y Despliegue
 
-> [!IMPORTANT]
-> **Permisos de Escritura:** El contenedor se ejecuta con un usuario no-root (UID 1000). Para evitar errores de permisos al crear carpetas de datos, ejecuta el script de configuración inicial:
-> ```bash
-> chmod +x setup.sh && ./setup.sh
-> ```
+ 1.  **Configura tu entorno**: Crea y ajusta el archivo `.env` basado en tus necesidades (puedes elegir el perfil de hardware y configurar la generación en la nube).
+ 2.  **Permisos de Escritura**: El contenedor se ejecuta con un usuario no-root (UID 1000). Para evitar errores de permisos al crear carpetas de datos, ejecuta el script de configuración inicial:
+     ```bash
+     chmod +x setup.sh && ./setup.sh
+     ```
+ 3.  **Lanzamiento**:
+     ```bash
+     docker compose up -d
+     ```
 
-Luego, lanza la plataforma en el modo estándar (CPU):
-
-```bash
-docker compose --profile cpu up --build
-```
+ > [!TIP]
+ > **Hardware AMD**: En procesadores Ryzen con iGPU (como el 8845HS), se recomienda usar el perfil `cpu` en el `.env` para mayor estabilidad por el momento.
 
 ### 3. Primeros Pasos
 - Accede a `http://localhost:3000`.
@@ -59,8 +60,8 @@ docker compose --profile cpu up --build
 
 Estas son funcionalidades en las que se podría trabajar o que se consideran como posibles evoluciones, aunque actualmente **no están implementadas ni probadas oficialmente**:
 
-- **Aceleración GPU NVIDIA (CUDA):** Optimización para aprovechar tarjetas gráficas NVIDIA y acelerar drásticamente la generación.
-- **Integración Cloud:** Posibilidad de procesar en la nube (ej: Modal.com) para usuarios sin hardware potente.
+- **Aceleración NVIDIA RTX (Serie 40/50):** Optimización avanzada para las últimas tarjetas gráficas.
+- **Aceleración AMD (ROCm v6):** Mejorar la compatibilidad con iGPUs de alto rendimiento.
 - **Soporte Multi-plataforma:** Optimización específica para Windows/WSL2 y macOS (Apple Silicon).
 - **Modelo SaaS:** Sistema de usuarios, autenticación y gestión de suscripciones.
 - **Reproductor Móvil PWA:** Interfaz optimizada para escuchar los audiolibros generados desde cualquier dispositivo.

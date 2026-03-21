@@ -53,6 +53,37 @@ services:
               capabilities: [ gpu ]
     restart: unless-stopped
 
+  # --- Motor AMD ROCm (iGPU Radeon 780M / gfx1103) ---
+  tts-engine-rocm:
+    profiles: [ "rocm" ]
+    privileged: true
+    user: "0:0"
+    build:
+      context: ./tts-engine
+      dockerfile: Dockerfile.rocm
+    container_name: tts-engine-rocm
+    # ROCm necesita acceso directo a los dispositivos de renderizado y KFD
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    expose:
+      - "8000"
+    volumes:
+      - ./data/models:/models
+      - ./data/voices:/voice
+    networks:
+      default:
+        aliases:
+          - tts-engine
+    environment:
+      - HF_HOME=/models
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0
+    deploy:
+      resources:
+        limits:
+          memory: 12g  # Recomendado para modelos 1.7B o clonación
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: audiobook-postgres

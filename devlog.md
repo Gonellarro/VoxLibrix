@@ -38,8 +38,24 @@ En esta versión nos centramos en la eficiencia de la biblioteca y la facilidad 
 
 ---
 
+## v0.6.0 - Configuración Universal & Estabilidad
+*Fecha: 2026-03-21*
+
+Versión centrada en la robustez de la configuración y la compatibilidad con diferentes tipos de hardware (CPU, AMD, NVIDIA).
+
+### Hitos Alcanzados
+- **Sistema de Perfiles (Docker Profiles)**: Los motores de IA ahora se gestionan mediante perfiles (`cpu`, `rocm`, `nvidia`) unificados bajo el alias `tts-engine`.
+- **Configuración centralizada (.env)**: Migración de variables de entorno de `docker-compose.yml` a un archivo `.env` externo, facilitando la personalización y ocultando URLs técnicas.
+- **Auto-perfilado**: Uso de `COMPOSE_PROFILES` en el `.env` para que `docker compose up -d` arranque automáticamente el motor deseado sin parámetros extra.
+- **Compatibilidad AMD (Ryzen 8845HS)**: Identificación del modo `cpu` como el más estable para hardware AMD debido a inestabilidades detectadas en los drivers ROCm actuales (Kernel < 7).
+- **Control de Error en Borrado**: Los 500 al borrar voces en uso ahora se capturan y devuelven un mensaje explicativo al usuario indicando que la voz está vinculada a audiolibros.
+- **Cloud TTS Sync**: Mejora en la sincronización de la generación en la nube, moviendo las pruebas de voz (`/test`) al motor local para mayor velocidad de iteración.
+
+---
+
 ## 🔮 Roadmap / Futuro (No implementado)
 
-- **Aceleración GPU (CUDA/NVIDIA)**: Pendiente de implementación y pruebas de estabilidad.
+- **Aceleración GPU (NVIDIA RTX 5060)**: Pendiente de pulido de los drivers CUDA en Docker para esta serie.
 - **Sistema de Usuarios**: Sincronización de bibliotecas y perfiles personales.
 - **Reproductor PWA**: Interfaz de escucha optimizada para consumo móvil offline.
+

@@ -1,5 +1,5 @@
-import io
 import os
+import io
 import torch
 import soundfile as sf
 from fastapi import FastAPI, HTTPException
@@ -7,99 +7,68 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from qwen_tts import Qwen3TTSModel
 
-app = FastAPI(
-    title="Qwen3-TTS API",
-    description="Síntesis de voz con clonación · Modelo Qwen3-TTS 0.6B",
-    version="1.0"
-)
-
-# --- Configuración desde variables de entorno ---
+# --- Configuración básica ---
 MODEL_PATH = os.environ.get("TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-0.6B-Base")
-REF_AUDIO  = os.environ.get("REF_AUDIO",  "/voice/referencia.wav")
-REF_TEXT   = os.environ.get("REF_TEXT",   "")
+DEVICE     = os.environ.get("DEVICE", "cuda:0")
+DTYPE      = os.environ.get("DTYPE", "bfloat16")
+REF_AUDIO  = os.environ.get("REF_AUDIO", "/voice/referencia.wav")
+REF_TEXT   = os.environ.get("REF_TEXT", "Esta es una voz de prueba.")
 
-print(f"Cargando modelo: {MODEL_PATH}")
-print(f"Audio de referencia: {REF_AUDIO}")
+print(f"--- Iniciando Motor TTS (ROCm) ---")
+print(f"Cargando modelo Base para CLONACIÓN desde {MODEL_PATH}...", flush=True)
 
-model = Qwen3TTSModel.from_pretrained(
-    MODEL_PATH,
-    device_map="cpu",
-    dtype=torch.float32,         # float32 para CPU
-    attn_implementation="eager", # sin flash_attention (solo NVIDIA)
-)
+# Cargar modelo
+torch_dtype = torch.bfloat16 if DTYPE == "bfloat16" else torch.float16
+model = Qwen3TTSModel.from_pretrained(MODEL_PATH, device_map=DEVICE, dtype=torch_dtype)
 
-print("Modelo listo ✓")
+# Inspección básica por si falla
+if not hasattr(model, "generate_voice_clone"):
+    print(f"⚠️ El modelo no tiene 'generate_voice_clone'. Métodos: {[m for m in dir(model) if not m.startswith('_')]}")
 
-# --- Esquema de la petición ---
+print(f"✅ Motor Base cargado y listo en {DEVICE}")
+
+app = FastAPI()
+
 class TTSRequest(BaseModel):
     text: str
     language: str = "Spanish"
-    ref_audio: str = None  # Opcional: ruta al audio de referencia
-    ref_text: str = None   # Opcional: transcripción exacta
+    ref_audio: str = None
+    ref_text: str = None
 
-# --- Endpoints ---
-@app.post(
-    "/tts",
-    summary="Sintetiza voz clonada a partir de texto",
-    response_description="Archivo WAV con el audio generado"
-)
+@app.post("/tts")
 async def synthesize(req: TTSRequest):
-    if not req.text.strip():
-        raise HTTPException(status_code=400, detail="El texto no puede estar vacío.")
-
-    # Prioridad: petición > variable de entorno
-    current_ref_audio = req.ref_audio or REF_AUDIO
-    current_ref_text = req.ref_text or REF_TEXT
-
-    if not os.path.exists(current_ref_audio):
-        raise HTTPException(
-            status_code=500,
-            detail=f"Audio de referencia no encontrado en {current_ref_audio}. "
-                   "Asegúrate de colocar tu archivo en la carpeta ./voice/"
-        )
-
-    if not current_ref_text:
-        raise HTTPException(
-            status_code=500,
-            detail="No se ha proporcionado texto de referencia (REF_TEXT está vacío)."
-        )
-
+    print(f"\n>> Petición recibida: {req.text[:30]}...", flush=True)
     try:
+        # 1. Resolver audio de referencia
+        audio_ref = req.ref_audio or REF_AUDIO
+        if not os.path.exists(audio_ref):
+            print(f"⚠️ {audio_ref} no existe, buscando fallback en /voice...", flush=True)
+            files = [f for f in os.listdir("/voice") if f.endswith((".wav", ".mp3", ".flac"))]
+            if files:
+                audio_ref = os.path.join("/voice", files[0])
+                print(f"✅ Usando: {audio_ref}", flush=True)
+            else:
+                raise Exception("No hay audios en /voice para clonar")
+
+        text_ref = req.ref_text or REF_TEXT
+
+        # 2. GENERAR (Clonación de voz)
+        print(f"Clonando voz con {audio_ref}...", flush=True)
         wavs, sr = model.generate_voice_clone(
             text=req.text,
             language=req.language,
-            ref_audio=current_ref_audio,
-            ref_text=current_ref_text,
+            ref_audio=audio_ref,
+            ref_text=text_ref
         )
+        print(f"✨ Audio generado", flush=True)
+
+        buffer = io.BytesIO()
+        sf.write(buffer, wavs[0], sr, format="WAV")
+        buffer.seek(0)
+        return StreamingResponse(buffer, media_type="audio/wav")
+
     except Exception as e:
+        print(f"🔥 ERROR: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-    buffer = io.BytesIO()
-    sf.write(buffer, wavs[0], sr, format="WAV")
-    buffer.seek(0)
-
-    return StreamingResponse(
-        buffer,
-        media_type="audio/wav",
-        headers={"Content-Disposition": "attachment; filename=audio.wav"}
-    )
-
-
-@app.get("/health", summary="Estado del servicio")
-async def health():
-    return {
-        "status": "ok",
-        "model": MODEL_PATH,
-        "ref_audio": REF_AUDIO,
-        "ref_audio_exists": os.path.exists(REF_AUDIO),
-        "ref_text_configured": bool(REF_TEXT),
-    }
-
-
-@app.get("/", summary="Bienvenida")
-async def root():
-    return {
-        "servicio": "Qwen3-TTS API",
-        "docs": "http://localhost:8000/docs",
-        "uso": "POST /tts con body: {\"text\": \"Tu texto aquí\", \"language\": \"Spanish\"}"
-    }
