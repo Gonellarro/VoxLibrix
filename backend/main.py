@@ -77,6 +77,7 @@ app.include_router(books.router, prefix="/books", tags=["Libros"])
 app.include_router(audiobooks.router, prefix="/audiobooks", tags=["Audiolibros"])
 app.include_router(tags.router, prefix="/tags", tags=["Etiquetas"])
 app.include_router(openai.router, prefix="/v1", tags=["OpenAI Compatibility"])
+app.include_router(openai.router, tags=["OpenAI Root Compatibility"])
 
 # Portadas de libros
 covers_path = os.path.join(DATA_DIR, "covers")

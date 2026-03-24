@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # ── Authors ──────────────────────────────────────────────────────────────────
@@ -147,6 +147,7 @@ class AudiobookResponse(BaseModel):
 # ── OpenAI Compatibility ──────────────────────────────────────────────────────
 
 class OpenAISpeechRequest(BaseModel):
+    model_config = ConfigDict(extra='ignore')
     model: str
     input: str
     voice: str
