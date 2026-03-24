@@ -46,7 +46,7 @@ async def ensure_voice(voice_id: str):
 
 
 
-async def generate(text: str, voice_id: str, output_path: str):
+async def generate(text: str, voice_id: str, output_path: str, speed: float = 1.0):
     """Genera audio usando Piper TTS."""
     onnx_path = os.path.join(PIPER_MODELS_DIR, f"{voice_id}.onnx")
     
@@ -54,11 +54,20 @@ async def generate(text: str, voice_id: str, output_path: str):
         await ensure_voice(voice_id)
         
     # Piper lee de stdin y suelta el audio por stdout o a un archivo
-    process = await asyncio.create_subprocess_exec(
+    args = [
         PIPER_BINARY,
         "-m", onnx_path,
         "-f", output_path,
         "--sentence-silence", "1",
+    ]
+    
+    if speed != 1.0:
+        # Piper usa length_scale (inverso de la velocidad)
+        length_scale = 1.0 / speed
+        args.extend(["--length-scale", str(length_scale)])
+
+    process = await asyncio.create_subprocess_exec(
+        *args,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE

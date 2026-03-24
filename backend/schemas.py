@@ -51,6 +51,7 @@ class VoiceResponse(BaseModel):
     language: Optional[str]
     model_ref: Optional[str]
     is_active: bool
+    broken: Optional[bool] = False
     created_at: datetime
 
     class Config:
@@ -141,3 +142,13 @@ class AudiobookResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ── OpenAI Compatibility ──────────────────────────────────────────────────────
+
+class OpenAISpeechRequest(BaseModel):
+    model: str
+    input: str
+    voice: str
+    response_format: Optional[str] = "mp3"
+    speed: Optional[float] = 1.0

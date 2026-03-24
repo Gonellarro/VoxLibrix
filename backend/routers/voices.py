@@ -62,7 +62,7 @@ async def test_piper_voice(voice_id: str, payload: schemas.VoiceTestRequest):
     import uuid
     output_path = f"/tmp/piper_test_{uuid.uuid4().hex}.wav"
     try:
-        await generate(payload.text, voice_id, output_path)
+        await generate(payload.text, voice_id, output_path, speed=1.0)
         return FileResponse(output_path, media_type="audio/wav", filename=f"test_{voice_id}.wav")
     except Exception as e:
         raise HTTPException(500, f"Error generando audio: {str(e)}")
@@ -71,7 +71,11 @@ async def test_piper_voice(voice_id: str, payload: schemas.VoiceTestRequest):
 @router.get("", response_model=list[schemas.VoiceResponse])
 async def list_voices(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(models.Voice).order_by(models.Voice.created_at.desc()))
-    return result.scalars().all()
+    voices = result.scalars().all()
+    # Usamos un flag temporal que Pydantic recogerá al serializar
+    for v in voices:
+        object.__setattr__(v, "broken", not os.path.exists(v.sample_path) if v.sample_path else True)
+    return voices
 
 
 @router.post("", response_model=schemas.VoiceResponse)
@@ -118,6 +122,7 @@ async def get_voice(voice_id: int, db: AsyncSession = Depends(get_db)):
     v = await db.get(models.Voice, voice_id)
     if not v:
         raise HTTPException(404, "Voz no encontrada")
+    object.__setattr__(v, "broken", not os.path.exists(v.sample_path) if v.sample_path else True)
     return v
 
 

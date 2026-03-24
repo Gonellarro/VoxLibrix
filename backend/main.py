@@ -7,7 +7,7 @@ import os
 from fastapi.staticfiles import StaticFiles
 from database import AsyncSessionLocal
 import models
-from routers import voices, books, audiobooks, authors, admin, tags
+from routers import voices, books, audiobooks, authors, admin, tags, openai
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 
@@ -76,6 +76,7 @@ app.include_router(voices.router, prefix="/voices", tags=["Voces"])
 app.include_router(books.router, prefix="/books", tags=["Libros"])
 app.include_router(audiobooks.router, prefix="/audiobooks", tags=["Audiolibros"])
 app.include_router(tags.router, prefix="/tags", tags=["Etiquetas"])
+app.include_router(openai.router, prefix="/v1", tags=["OpenAI Compatibility"])
 
 # Portadas de libros
 covers_path = os.path.join(DATA_DIR, "covers")

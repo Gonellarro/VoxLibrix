@@ -349,12 +349,13 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                             f.write(resp.content)
                     else:
                         # 🏠 MODO QWEN (Local pesado / Default)
-                        resp = await client.post(f"{TTS_URL}/tts", json={
+                        payload_qwen = {
                             "text": chunk.source_text,
                             "language": "Spanish",
                             "ref_audio": backend_to_tts_path(voice.sample_path),
                             "ref_text": voice.model_ref or "",
-                        })
+                        }
+                        resp = await client.post(f"{TTS_URL}/tts", json=payload_qwen)
                         resp.raise_for_status()
                         with open(chunk_path, "wb") as f:
                             f.write(resp.content)

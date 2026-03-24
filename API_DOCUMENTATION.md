@@ -82,3 +82,34 @@ Estos son los IDs que puedes usar en la URL de Piper:
 - `es_ES-carlfm-x_low` (Voz masculina muy rápida/ligera)
 - `es_ES-mls_9972-low` (Voz diversa)
 - `es_ES-mls_10246-low` (Voz diversa)
+
+---
+
+## 4. API Compatible con OpenAI (Recomendada para aplicaciones externas)
+
+Esta API permite usar el servidor como un reemplazo directo de OpenAI. Muchas herramientas de IA ya soportan este formato.
+
+**Endpoints:**
+- `GET /v1/voices`: Lista todas las voces disponibles (Piper y Clonación). Incluye un campo `broken: true` si a la voz clonada le falta su archivo de origen.
+- `POST /v1/audio/speech`: Genera audio compatible con OpenAI.
+
+**Parámetros para `POST /v1/audio/speech`:**
+- `model`: (`tts-1` para Piper, `tts-1-hd` para Qwen).
+- `input`: El texto a sintetizar.
+- `voice`: ID de la voz de Piper (ej: `es_ES-sharvard-medium`) o **Nombre** de la voz clonada en tu base de datos.
+- `response_format`: `mp3` (default), `wav`, `flac`, `aac`.
+- `speed`: De `0.25` a `4.0` (Piper) o `0.5` a `2.0` (Qwen).
+
+**Ejemplo de comando:**
+```bash
+curl -X POST http://localhost:8080/v1/audio/speech \
+     -H "Content-Type: application/json" \
+     -d '{
+           "model": "tts-1",
+           "input": "Este es un mensaje compatible con el estándar de OpenAI.",
+           "voice": "es_ES-sharvard-medium",
+           "response_format": "mp3",
+           "speed": 1.0
+         }' \
+     --output speech_openai.mp3
+```
