@@ -17,8 +17,14 @@ REF_TEXT   = os.environ.get("REF_TEXT", "Esta es una voz de prueba.")
 print(f"--- Iniciando Motor TTS (ROCm) ---")
 print(f"Cargando modelo Base para CLONACIÓN desde {MODEL_PATH}...", flush=True)
 
-# Cargar modelo
-torch_dtype = torch.bfloat16 if DTYPE == "bfloat16" else torch.float16
+# Cargar modelo con precisión segura para CPU
+if DTYPE == "float32":
+    torch_dtype = torch.float32
+elif DTYPE == "bfloat16":
+    torch_dtype = torch.bfloat16
+else:
+    torch_dtype = torch.float16
+
 model = Qwen3TTSModel.from_pretrained(MODEL_PATH, device_map=DEVICE, dtype=torch_dtype)
 
 # Inspección básica por si falla

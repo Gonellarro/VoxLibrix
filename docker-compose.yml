@@ -18,6 +18,8 @@ services:
           - tts-engine
     environment:
       - HF_HOME=/models
+      - DEVICE=cpu
+      - DTYPE=float32
     restart: unless-stopped
     deploy:
       resources:

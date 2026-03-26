@@ -53,6 +53,19 @@ Versión centrada en la robustez de la configuración y la compatibilidad con di
 
 ---
 
+## v0.6.1 - CPU Opt-Stability & Vulkan Post-Mortem
+*Fecha: 2026-03-26*
+
+Versión de estabilización tras intentar la integración de motores Vulkan para hardware AMD (Ryzen 780M). Lecciones aprendidas sobre la madurez de los runtimes de Rust y la superioridad de la CPU Zen4 para inferencia determinista.
+
+### Hitos Alcanzados
+- **Estabilización de Precisión (Float32)**: Migración forzada a `float32` en el motor de CPU para eliminar errores de `NaN/inf` (RuntimeError) detectados en cálculos `bfloat16` bajo carga intensa en procesadores AMD Zen4.
+- **Detección Automática de Dispositivo**: Ajuste en el script `servidor_tts.py` para garantizar que PyTorch use explícitamente el backend `cpu` de forma estable.
+- **Lección Aprendida (Vulkan/AMD)**: Se descarta la integración de `qwen3-tts-rust` vía Vulkan debido a inestabilidades críticas en la inicialización de ONNX Runtime (`deadlocks` en drivers de video) y la falta de soporte nativo para Linux/AMD en los repositorios actuales orientados a NVIDIA.
+- **Eficiencia de Memoria**: Límite de RAM optimizado a 8GB para el servicio `tts-engine-cpu`, suficiente para el modelo 0.6B Base con clonación de voz ICL.
+
+---
+
 ## 🔮 Roadmap / Futuro (No implementado)
 
 - **Aceleración GPU (NVIDIA RTX 5060)**: Pendiente de pulido de los drivers CUDA en Docker para esta serie.
