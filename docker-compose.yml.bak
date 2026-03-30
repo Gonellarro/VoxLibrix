@@ -1,4 +1,5 @@
 services:
+
   postgres:
     image: postgres:16-alpine
     container_name: audiobook-postgres
@@ -19,8 +20,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - app-network
 
   backend:
     build: ./backend
@@ -42,8 +41,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
     command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
-    networks:
-      - app-network
 
   frontend:
     build: ./frontend
@@ -55,11 +52,3 @@ services:
       - /app/node_modules
     command: npm run dev -- --host
     restart: unless-stopped
-    depends_on:        # ← AÑADIDO
-      - backend
-    networks:          # ← AÑADIDO
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
