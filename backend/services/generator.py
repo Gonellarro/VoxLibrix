@@ -348,14 +348,20 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
                         with open(chunk_path, "wb") as f:
                             f.write(resp.content)
                     else:
-                        # 🏠 MODO QWEN (Local pesado / Default)
+                        # 🏠 MODO QWEN EXTERNO (FastAPI OpenAI Compatible)
+                        with open(voice.sample_path, "rb") as f:
+                            audio_data = f.read()
+
                         payload_qwen = {
-                            "text": chunk.source_text,
+                            "input": chunk.source_text,
                             "language": "Spanish",
-                            "ref_audio": backend_to_tts_path(voice.sample_path),
+                            "ref_audio": base64.b64encode(audio_data).decode("utf-8"),
                             "ref_text": voice.model_ref or "",
+                            "response_format": "wav"
                         }
-                        resp = await client.post(f"{TTS_URL}/tts", json=payload_qwen)
+                        
+                        # Llamada al nuevo endpoint expuesto en tu puerto 8880
+                        resp = await client.post(f"{TTS_URL}/v1/audio/voice-clone", json=payload_qwen, timeout=600)
                         resp.raise_for_status()
                         with open(chunk_path, "wb") as f:
                             f.write(resp.content)
