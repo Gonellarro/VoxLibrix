@@ -20,11 +20,16 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 # Estado global de generaciones en curso
 _tasks: dict[int, asyncio.Task] = {}
 _cancel_set: set[int] = set()
+_queue = asyncio.Queue()
+_queued_ids: set[int] = set()
+_worker_task: asyncio.Task | None = None
 
 
 def is_running(audiobook_id: int) -> bool:
+    """Devuelve True si el audiolibro se está procesando o está en cola."""
     task = _tasks.get(audiobook_id)
-    return task is not None and not task.done()
+    running = task is not None and not task.done()
+    return running or audiobook_id in _queued_ids
 
 
 def backend_to_tts_path(path: str) -> str:
@@ -170,8 +175,32 @@ def parse_chunks(text: str, book_type: str) -> list[dict]:
     return chunks
 
 
+async def _worker():
+    """Worker que procesa la cola de audiolibros uno a uno."""
+    while True:
+        audiobook_id = await _queue.get()
+        _queued_ids.discard(audiobook_id)
+        
+        try:
+            # Comprobar si se canceló mientras estaba en cola
+            if audiobook_id in _cancel_set:
+                _cancel_set.discard(audiobook_id)
+                await _set_status(audiobook_id, "pending")
+                continue
+
+            # Iniciar la generación y esperar a que termine
+            task = asyncio.create_task(_generate(audiobook_id))
+            _tasks[audiobook_id] = task
+            await task
+        except Exception as e:
+            print(f"🔥 Error crítico en worker para audiolibro {audiobook_id}: {e}")
+        finally:
+            _tasks.pop(audiobook_id, None)
+            _queue.task_done()
+
+
 async def start(audiobook_id: int, use_cloud: bool = False):
-    """Inicia o reanuda la generación de un audiolibro."""
+    """Añade un audiolibro a la cola de generación."""
     if is_running(audiobook_id):
         return
     
@@ -181,8 +210,32 @@ async def start(audiobook_id: int, use_cloud: bool = False):
             await db.execute(update(models.Audiobook).where(models.Audiobook.id == audiobook_id).values(engine="cloud"))
             await db.commit()
 
-    task = asyncio.create_task(_generate(audiobook_id))
-    _tasks[audiobook_id] = task
+    # Marcamos como en cola
+    await _set_status(audiobook_id, "queued")
+    _queued_ids.add(audiobook_id)
+    await _queue.put(audiobook_id)
+
+    # Aseguramos que el worker esté corriendo
+    global _worker_task
+    if _worker_task is None or _worker_task.done():
+        _worker_task = asyncio.create_task(_worker())
+
+
+async def bootstrap():
+    """Recupera los audiolibros que estaban en cola o procesándose al reiniciar."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(models.Audiobook.id)
+            .where(models.Audiobook.status.in_(["queued", "processing"]))
+            .order_by(models.Audiobook.started_at)
+        )
+        ids = result.scalars().all()
+        if ids:
+            print(f"🔄 Recuperando {len(ids)} audiolibros interrumpidos...")
+            for ab_id in ids:
+                # No llamamos a start() directamente para evitar flushes repetidos por ahora,
+                # lo hacemos simple ya que start() maneja la lógica de re-entrada.
+                await start(ab_id)
 
 
 async def pause(audiobook_id: int):
@@ -392,8 +445,6 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
 
     except Exception as e:
         await _set_status(audiobook_id, "error", error_message=str(e)[:500])
-    finally:
-        _tasks.pop(audiobook_id, None)
 
 
 def sanitize_filename(name: str) -> str:

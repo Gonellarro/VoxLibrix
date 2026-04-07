@@ -66,6 +66,19 @@ Versión de estabilización tras intentar la integración de motores Vulkan para
 
 ---
 
+## v0.7.0 - Cola de Generación Secuencial & UX de Estado
+*Fecha: 2026-04-07*
+
+Implementación de un sistema de cola (Queue) para la generación de audiolibros, optimizando el uso de recursos y permitiendo encolar múltiples libros sin saturar la GPU ni la memoria del sistema.
+
+### Hitos Alcanzados
+- **Sistema de Cola Secuencial**: Implementación de un worker en segundo plano que procesa los audiolibros uno a uno (FIFO), eliminando la saturación de hardware por procesos en paralelo.
+- **Estado "En cola" (Queued)**: Nueva lógica de estados completa en Backend (FastAPI) y Frontend (React) para distinguir entre libros pendientes, en espera, en proceso y finalizados.
+- **Persistencia de Gestión (Bootstrap)**: Los libros marcados como "Queued" o "Processing" se re-encolan automáticamente al reiniciar el contenedor gracias a un nuevo hook de `lifespan` en el servidor.
+- **Refinamiento de la Interfaz (Estudio)**: Agrupación dinámica en la vista de estudio con una nueva sección "En cola" y badges visuales mejorados para monitorizar el flujo de trabajo.
+
+---
+
 ## 🔮 Roadmap / Futuro (No implementado)
 
 - **Aceleración GPU (NVIDIA RTX 5060)**: Pendiente de pulido de los drivers CUDA en Docker para esta serie.

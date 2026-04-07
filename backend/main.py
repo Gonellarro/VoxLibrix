@@ -41,17 +41,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Error sembrando tags iniciales: {e}")
 
-    # 2. Resetear estados de procesos interrumpidos
+    # 2. Resetear estados de procesos interrumpidos y recuperar cola
+    from services import generator
     try:
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                update(models.Audiobook)
-                .where(models.Audiobook.status == "processing")
-                .values(status="pending")
-            )
-            await db.commit()
+        await generator.bootstrap()
     except Exception as e:
-        print(f"Aviso de arranque: No se pudo resetear estados: {e}")
+        print(f"Aviso de arranque: No se pudo recuperar la cola: {e}")
     yield
 
 

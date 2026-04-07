@@ -175,14 +175,14 @@ async def start_generation(
     if generator.is_running(ab_id):
         raise HTTPException(400, "La generación ya está en curso")
     
-    # Marcamos el inicio de la generación para las métricas
+    # Marcamos el inicio de la generación (ponerlo en cola)
     from datetime import datetime
     ab.started_at = datetime.utcnow()
-    ab.status = "processing"
+    ab.status = "queued"
     await db.commit()
     
     await generator.start(ab_id, use_cloud=use_cloud)
-    return {"ok": True, "status": "processing"}
+    return {"ok": True, "status": "queued"}
 
 
 @router.post("/{ab_id}/pause")

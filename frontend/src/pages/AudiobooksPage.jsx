@@ -666,8 +666,8 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay,
                     <div className="list-item-title">{book?.title || `Audiolibro #${ab.id}`}</div>
                     <div className="list-item-author">🎙 {ab.narratorName}</div>
                     <div className="list-item-tags">
-                        <span className={`badge badge-sm badge-${status === 'pending' && isRunning ? 'processing' : status}`} style={{fontSize: 9, padding: '1px 6px'}}>
-                            {isRunning ? '...' : status === 'done' ? 'OK' : status}
+                        <span className={`badge badge-sm badge-${status}`} style={{fontSize: 9, padding: '1px 6px'}}>
+                            {status === 'queued' ? 'COLA' : (isRunning ? '...' : status === 'done' ? 'OK' : status.toUpperCase())}
                         </span>
                         <span className={`badge badge-sm badge-engine-${ab.engine}`} style={{fontSize: 9, padding: '1px 6px'}}>{ab.engine}</span>
                     </div>
@@ -719,8 +719,8 @@ function ProgressCard({ ab, book, onRefresh, addToast, onRemove, onEdit, onPlay,
             <div className="book-card-right">
                 <div className="ab-header">
                     <h3 className="ab-title" title={book?.title}>{book?.title || `Audiolibro #${ab.id}`}</h3>
-                    <span className={`badge badge-${status === 'pending' && isRunning ? 'processing' : status}`}>
-                        {isRunning ? 'Procesando' : status === 'pending' ? 'Pendiente' : status === 'done' ? 'Completado' : status === 'error' ? 'Error' : 'En curso'}
+                    <span className={`badge badge-${status}`}>
+                        {status === 'queued' ? 'En cola' : (isRunning || status === 'processing' ? 'Procesando' : status === 'pending' ? 'Pendiente' : status === 'done' ? 'Completado' : status === 'error' ? 'Error' : 'En curso')}
                     </span>
                 </div>
 
@@ -921,13 +921,13 @@ export default function AudiobooksPage() {
             ) : (
                 <>
                     {/* Group by status */}
-                    {['processing', 'pending', 'done', 'error'].map(s => {
+                    {['processing', 'queued', 'pending', 'done', 'error'].map(s => {
                         const group = enriched
                             .filter(a => a.status === s)
                             .filter(a => !selectedTagId || a.tags?.some(t => t.id === selectedTagId))
 
                         if (!group.length) return null
-                        const labels = { processing: 'En proceso', pending: 'Pendientes', done: 'Completados', error: 'Con error' }
+                        const labels = { processing: 'En proceso', queued: 'En cola', pending: 'Pendientes', done: 'Completados', error: 'Con error' }
                         return (
                             <div key={s}>
                                 <div className="section-label">{labels[s]}</div>
