@@ -117,19 +117,26 @@ async def speech(payload: schemas.OpenAISpeechRequest, db: AsyncSession = Depend
                     voice = await db.get(models.Voice, v_id)
                 except: pass
             
-            if not voice:
-                await piper_engine.generate(payload.input, "es_ES-sharvard-medium", temp_wav, speed=payload.speed)
             else:
-                async with httpx.AsyncClient(timeout=600) as client:
-                    resp = await client.post(f"{TTS_URL}/tts", json={
-                        "text": payload.input,
-                        "language": "Spanish",
-                        "ref_audio": backend_to_tts_path(voice.sample_path),
-                        "ref_text": voice.model_ref or "",
-                    })
-                    resp.raise_for_status()
-                    with open(temp_wav, "wb") as f:
-                        f.write(resp.content)
+                import base64
+                if not voice.sample_path or not os.path.exists(voice.sample_path):
+                    await piper_engine.generate(payload.input, "es_ES-sharvard-medium", temp_wav, speed=payload.speed)
+                else:
+                    async with httpx.AsyncClient(timeout=600) as client:
+                        with open(voice.sample_path, "rb") as f:
+                            audio_data = f.read()
+                            
+                        payload_qwen = {
+                            "input": payload.input,
+                            "ref_audio": base64.b64encode(audio_data).decode("utf-8"),
+                            "ref_text": voice.model_ref or "",
+                            "response_format": "wav"
+                        }
+                        
+                        resp = await client.post(f"{TTS_URL}/v1/audio/voice-clone", json=payload_qwen)
+                        resp.raise_for_status()
+                        with open(temp_wav, "wb") as f:
+                            f.write(resp.content)
                 
                 if payload.speed != 1.0:
                     speed_wav = f"/tmp/openai_{temp_id}_speed.wav"

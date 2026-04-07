@@ -214,14 +214,24 @@ async def test_voice(voice_id: int, payload: schemas.VoiceTestRequest, db: Async
     if not v:
         raise HTTPException(404, "Voz no encontrada")
     
+    # Leer el audio de referencia y convertirlo a base64
+    import base64
+    if not v.sample_path or not os.path.exists(v.sample_path):
+        raise HTTPException(400, "La voz no tiene audio de referencia")
+    
+    try:
+        with open(v.sample_path, "rb") as f:
+            ref_audio_b64 = base64.b64encode(f.read()).decode("utf-8")
+    except Exception as e:
+        raise HTTPException(500, f"Error leyendo audio de referencia: {str(e)}")
+    
     async with httpx.AsyncClient(timeout=600) as client:
         try:
-            # 🏠 MODO LOCAL (Forzado por usuario)
-            resp = await client.post(f"{TTS_URL}/tts", json={
-                "text": payload.text,
-                "language": "Spanish",
-                "ref_audio": backend_to_tts_path(v.sample_path),
+            resp = await client.post(f"{TTS_URL}/v1/audio/voice-clone", json={
+                "input": payload.text,
+                "ref_audio": ref_audio_b64,
                 "ref_text": v.model_ref or "",
+                "response_format": "wav",
             })
             resp.raise_for_status()
             return Response(content=resp.content, media_type="audio/wav")

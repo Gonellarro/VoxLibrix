@@ -354,13 +354,11 @@ async def _generate(audiobook_id: int, use_cloud: bool = False):
 
                         payload_qwen = {
                             "input": chunk.source_text,
-                            "language": "Spanish",
                             "ref_audio": base64.b64encode(audio_data).decode("utf-8"),
                             "ref_text": voice.model_ref or "",
                             "response_format": "wav"
                         }
                         
-                        # Llamada al nuevo endpoint expuesto en tu puerto 8880
                         resp = await client.post(f"{TTS_URL}/v1/audio/voice-clone", json=payload_qwen, timeout=600)
                         resp.raise_for_status()
                         with open(chunk_path, "wb") as f:

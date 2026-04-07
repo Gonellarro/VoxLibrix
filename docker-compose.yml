@@ -34,7 +34,7 @@ services:
     environment:
       - CLOUD_TTS_URL=${CLOUD_TTS_URL}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
-      - TTS_ENGINE_URL=http://host.docker.internal:8880
+      - TTS_ENGINE_URL=http://192.168.121.94:8880
       - DATA_DIR=${DATA_DIR}
       - PYTHONUNBUFFERED=1
     depends_on:
